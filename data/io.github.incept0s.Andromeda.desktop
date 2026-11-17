@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Andromeda
+Comment=System monitor, volume mixer and everyday tools
+Exec=andromeda
+Icon=io.github.incept0s.Andromeda
+Terminal=false
+Categories=System;Monitor;Utility;
+Keywords=monitor;cpu;gpu;temperature;volume;mixer;clipboard;ocr;
+StartupNotify=false
+# Tauri's window reports the binary name as its app id.
+StartupWMClass=andromeda

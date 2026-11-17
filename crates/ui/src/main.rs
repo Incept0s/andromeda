@@ -229,6 +229,8 @@ fn main() {
             commands::pkg_updates,
             commands::pkg_update_all,
             commands::open_file,
+            commands::autostart,
+            commands::set_autostart,
             commands::metrics,
             commands::history,
             commands::config,

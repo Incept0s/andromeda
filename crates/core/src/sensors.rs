@@ -26,6 +26,10 @@ struct FileMetric {
     id: String,
     path: PathBuf,
     scale: f64,
+    /// Secondary sensors (drive, Wi-Fi, RAM temperatures, fans): reading
+    /// some of them makes the kernel query the device and takes up to
+    /// 12 ms, so callers can skip them on most ticks.
+    slow: bool,
 }
 
 struct Battery {
@@ -199,7 +203,8 @@ impl Sensors {
     fn add_file(&mut self, info: MetricInfo, path: PathBuf, scale: f64) {
         // Only offer what can be read right now.
         if read_f64(&path).is_some() {
-            self.files.push(FileMetric { id: info.id.clone(), path, scale });
+            let slow = matches!(info.group, Group::Temps | Group::Fans);
+            self.files.push(FileMetric { id: info.id.clone(), path, scale, slow });
             self.metrics.push(info);
         }
     }
@@ -422,9 +427,19 @@ impl Sensors {
         }
     }
 
-    /// Reads every discovered metric once. CPU usage and all rates need two
+    /// Ids of the slow secondary sensors (see `FileMetric::slow`).
+    pub fn slow_ids(&self) -> Vec<String> {
+        self.files.iter().filter(|f| f.slow).map(|f| f.id.clone()).collect()
+    }
+
+    /// Reads every discovered metric once, or everything except the slow
+    /// sensors when `slow` is false. CPU usage and all rates need two
     /// readings, so they are absent from the very first sample.
     pub fn sample(&mut self) -> Vec<(String, f64)> {
+        self.sample_with(true)
+    }
+
+    pub fn sample_with(&mut self, slow: bool) -> Vec<(String, f64)> {
         let mut out = Vec::with_capacity(self.metrics.len());
         let now = Instant::now();
         let elapsed = self.last.map(|t| now.duration_since(t).as_secs_f64()).filter(|e| *e > 0.0);
@@ -476,7 +491,7 @@ impl Sensors {
             out.push(("mem.compressed".into(), z));
         }
 
-        for f in &self.files {
+        for f in self.files.iter().filter(|f| slow || !f.slow) {
             if let Some(v) = read_f64(&f.path) {
                 out.push((f.id.clone(), v * f.scale));
             }
@@ -831,6 +846,17 @@ mod tests {
         assert_eq!(value(&v, "bat.BAT0.power"), Some(12.5));
         assert_eq!(value(&v, "power.ac"), Some(1.0));
         assert_eq!(value(&v, "sys.uptime"), Some(4260.5));
+    }
+
+    #[test]
+    fn fast_sample_skips_secondary_sensors() {
+        let t = laptop();
+        let mut s = Sensors::discover(&t.sys(), &t.proc_());
+        let fast = s.sample_with(false);
+        assert!(value(&fast, "cpu.temp").is_some(), "CPU temperature stays fast");
+        assert!(value(&fast, "temp.nvme@nvme0.1").is_none());
+        assert!(value(&fast, "fan.asus.1").is_none());
+        assert!(s.slow_ids().contains(&"fan.asus.1".to_string()));
     }
 
     #[test]

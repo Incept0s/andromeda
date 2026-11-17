@@ -59,6 +59,8 @@ pub trait Daemon {
     fn shelf_add(&self, paths: &[&str]) -> zbus::Result<()>;
     fn shelf_remove(&self, path: &str) -> zbus::Result<()>;
     fn panel_visible(&self, visible: bool) -> zbus::Result<()>;
+    fn autostart(&self) -> zbus::Result<bool>;
+    fn set_autostart(&self, on: bool) -> zbus::Result<()>;
     fn quit(&self) -> zbus::Result<()>;
 }
 
@@ -354,4 +356,14 @@ pub fn open_file(path: String) -> R<()> {
         return Err("not found".into());
     }
     std::process::Command::new("gio").arg("open").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn autostart(app: AppHandle) -> R<bool> {
+    daemon(&app).await?.autostart().await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn set_autostart(app: AppHandle, on: bool) -> R<()> {
+    daemon(&app).await?.set_autostart(on).await.map_err(err)
 }

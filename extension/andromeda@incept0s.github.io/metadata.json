@@ -3,5 +3,6 @@
   "name": "Andromeda",
   "description": "Top-bar button for the Andromeda panel.",
   "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.andromeda",
   "url": "https://github.com/incept0s/andromeda"
 }

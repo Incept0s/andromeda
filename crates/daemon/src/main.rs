@@ -361,6 +361,29 @@ impl Daemon {
         self.shelf.remove(path);
     }
 
+    /// Whether the background service starts at login (systemd user unit).
+    async fn autostart(&self) -> bool {
+        tokio::process::Command::new("systemctl")
+            .args(["--user", "is-enabled", "andromedad.service"])
+            .output()
+            .await
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
+    }
+
+    async fn set_autostart(&self, on: bool) -> fdo::Result<()> {
+        let action = if on { "enable" } else { "disable" };
+        let out = tokio::process::Command::new("systemctl")
+            .args(["--user", action, "andromedad.service"])
+            .output()
+            .await
+            .map_err(|e| fdo::Error::Failed(e.to_string()))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(fdo::Error::Failed("Start at login is only available when Andromeda is installed from its RPM.".into()))
+        }
+    }
+
     /// Settings → System check, as JSON (`Vec<info::Check>`).
     async fn system_check(&self) -> String {
         let list = check::run(&self.session, self.system.as_ref(), &self.metrics, self.mixer.connected).await;
@@ -451,6 +474,8 @@ async fn main() -> zbus::Result<()> {
     let mut alerts = alerts::Alerts::default();
     let mut ticks: u64 = 0;
     let mut last_nvidia: Vec<(String, f64)> = Vec::new();
+    let slow_ids = sensors.slow_ids();
+    let mut last_slow: Vec<(String, f64)> = Vec::new();
     let sampler = async {
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         // After a suspend, don't fire a burst of missed ticks.
@@ -458,19 +483,31 @@ async fn main() -> zbus::Result<()> {
         loop {
             tick.tick().await;
             ticks += 1;
-            let mut sample = sensors.sample();
+            // Expensive readings (NVML, drive/Wi-Fi/RAM sensors) run every
+            // second only when someone looks at them: the panel is open, or
+            // the top bar or an enabled alert uses one. Otherwise every 10 s,
+            // with the last values carried over in between.
+            let (panel, watched) = {
+                let d = iface.get().await;
+                let mut watched: Vec<String> = Vec::new();
+                if d.config.features.topbar {
+                    watched.extend(config::topbar_or_default(&d.config, &d.metrics));
+                }
+                watched.extend(d.config.alerts.rules.iter().filter(|r| r.enabled).map(|r| r.metric.clone()));
+                (d.panel_visible, watched)
+            };
+            let uses = |pred: &dyn Fn(&str) -> bool| watched.iter().any(|w| pred(w));
+            let every_10 = ticks % 10 == 1;
+            let slow_now = panel || every_10 || uses(&|w| slow_ids.iter().any(|id| config::pattern_matches(w, id)));
+            let mut sample = sensors.sample_with(slow_now);
+            if slow_now {
+                last_slow = sample.iter().filter(|(id, _)| slow_ids.contains(id)).cloned().collect();
+            } else {
+                sample.extend(last_slow.iter().cloned());
+            }
             if let Some(n) = &nvidia {
-                // NVML calls are the costliest reading. Every second only
-                // when someone looks at a GPU number (panel open, top bar,
-                // an enabled GPU alert); otherwise every 10 s.
-                let fast = {
-                    let d = iface.get().await;
-                    let topbar = config::topbar_or_default(&d.config, &d.metrics);
-                    d.panel_visible
-                        || (d.config.features.topbar && topbar.iter().any(|id| id.starts_with("gpu.nvidia")))
-                        || d.config.alerts.rules.iter().any(|r| r.enabled && r.metric.starts_with("gpu."))
-                };
-                if fast || ticks % 10 == 1 {
+                let fast = panel || uses(&|w| w.starts_with("gpu."));
+                if fast || every_10 {
                     last_nvidia = n.sample();
                 }
                 sample.extend(last_nvidia.iter().cloned());

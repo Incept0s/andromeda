@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.andromeda" path="/org/gnome/shell/extensions/andromeda/">
+    <key name="toggle-panel" type="as">
+      <default>['&lt;Super&gt;a']</default>
+      <summary>Show or hide the Andromeda panel</summary>
+    </key>
+    <key name="freed-shortcuts" type="as">
+      <default>[]</default>
+      <summary>Shortcuts taken from GNOME's "Show apps", given back when the extension is disabled</summary>
+    </key>
+  </schema>
+</schemalist>

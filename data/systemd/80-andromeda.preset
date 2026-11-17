@@ -1,0 +1,2 @@
+# Start Andromeda's background service for every user by default.
+enable andromedad.service

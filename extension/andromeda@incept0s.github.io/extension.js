@@ -13,6 +13,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -56,6 +57,13 @@ export default class AndromedaExtension extends Extension {
         });
         Main.panel.addToStatusArea(this.uuid, this._button);
 
+        // Super+A opens the panel. GNOME uses it for "Show apps", so it is
+        // taken from there while Andromeda is enabled and given back after.
+        this._settings = this.getSettings();
+        this._freeShortcuts();
+        Main.wm.addKeybinding('toggle-panel', this._settings, Meta.KeyBindingFlags.NONE,
+            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW, () => this._toggle());
+
         // Hiding a GTK window on Wayland destroys its surface, so every
         // show creates a new MetaWindow and we place it again.
         this._windowCreatedId = global.display.connect('window-created',
@@ -87,6 +95,9 @@ export default class AndromedaExtension extends Extension {
     }
 
     disable() {
+        Main.wm.removeKeybinding('toggle-panel');
+        this._restoreShortcuts();
+        this._settings = null;
         global.display.disconnect(this._windowCreatedId);
         this._windowCreatedId = 0;
         this._selection.disconnect(this._ownerChangedId);
@@ -98,6 +109,27 @@ export default class AndromedaExtension extends Extension {
         this._label = null;
         this._button.destroy();
         this._button = null;
+    }
+
+    _freeShortcuts() {
+        const shell = new Gio.Settings({schema_id: 'org.gnome.shell.keybindings'});
+        const ours = this._settings.get_strv('toggle-panel');
+        const apps = shell.get_strv('toggle-application-view');
+        const taken = apps.filter(a => ours.includes(a));
+        if (taken.length === 0)
+            return;
+        this._settings.set_strv('freed-shortcuts', taken);
+        shell.set_strv('toggle-application-view', apps.filter(a => !taken.includes(a)));
+    }
+
+    _restoreShortcuts() {
+        const freed = this._settings.get_strv('freed-shortcuts');
+        if (freed.length === 0)
+            return;
+        const shell = new Gio.Settings({schema_id: 'org.gnome.shell.keybindings'});
+        const apps = shell.get_strv('toggle-application-view');
+        shell.set_strv('toggle-application-view', [...apps, ...freed.filter(a => !apps.includes(a))]);
+        this._settings.set_strv('freed-shortcuts', []);
     }
 
     _toggle() {

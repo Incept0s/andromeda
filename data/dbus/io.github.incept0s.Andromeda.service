@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=io.github.incept0s.Andromeda
+Exec=/usr/libexec/andromedad
+SystemdService=andromedad.service

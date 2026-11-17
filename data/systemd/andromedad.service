@@ -1,0 +1,15 @@
+[Unit]
+Description=Andromeda background service (sensors, alerts, clipboard history)
+Documentation=https://github.com/incept0s/andromeda
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=io.github.incept0s.Andromeda
+ExecStart=/usr/libexec/andromedad
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

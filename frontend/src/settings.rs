@@ -73,14 +73,38 @@ fn Toggle(
     }
 }
 
+#[derive(serde::Serialize)]
+struct On {
+    on: bool,
+}
+
 #[component]
 fn General() -> impl IntoView {
+    let autostart = RwSignal::new(None::<bool>);
+    let error = RwSignal::new(String::new());
+    tauri::spawn(async move { autostart.set(tauri::get("autostart").await) });
+    let toggle = move |_| {
+        let on = !autostart.get().unwrap_or(false);
+        tauri::spawn(async move {
+            match tauri::invoke::<_, ()>("set_autostart", &On { on }).await {
+                Ok(()) => {
+                    autostart.set(Some(on));
+                    error.set(String::new());
+                }
+                Err(e) => error.set(e),
+            }
+        });
+    };
     view! {
         <h2>"General"</h2>
-        <div class="setting"><div class="grow">
-            <div>"Start at login"</div>
-            <div class="muted small">"Andromeda's background service starts with your session. It keeps clipboard history, alerts and keep awake running. The panel itself only runs while you use it."</div>
-        </div></div>
+        <div class="setting">
+            <div class="grow">
+                <div>"Start at login"</div>
+                <div class="muted small">"The background service keeps clipboard history, alerts, keep awake and the top-bar numbers running. The panel itself only runs while you use it."</div>
+                <div class="small error">{move || error.get()}</div>
+            </div>
+            <button class="switch" class:on=move || autostart.get() == Some(true) on:click=toggle><i></i></button>
+        </div>
         <div class="setting">
             <div class="grow">
                 <div>"Updates"</div>

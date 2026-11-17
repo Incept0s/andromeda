@@ -41,6 +41,7 @@ reload_dbus
 
 # Symlink, so edits to extension.js need no copy (still need a re-login or a
 # nested session to reload on Wayland).
+glib-compile-schemas --strict "$ROOT/extension/$UUID/schemas"
 mkdir -p "$(dirname "$EXT_DIR")"
 ln -sfn "$ROOT/extension/$UUID" "$EXT_DIR"
 echo "Done. Extension linked at $EXT_DIR (not enabled)."
