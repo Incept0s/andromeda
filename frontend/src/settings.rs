@@ -54,7 +54,7 @@ impl Page {
 
 /// On/off switch bound to a config field.
 #[component]
-fn Toggle(
+pub fn Toggle(
     #[prop(into)] label: String,
     #[prop(into, optional)] hint: String,
     get: fn(&Config) -> bool,

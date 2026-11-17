@@ -8,6 +8,7 @@
 //! `mixer`, `config` and `awake` on change).
 
 mod awake;
+mod controls;
 mod disk;
 mod energy;
 mod mixer;
@@ -239,7 +240,7 @@ fn Panel() -> impl IntoView {
                     Tab::Disk => view! { <disk::DiskTab /> }.into_any(),
                     Tab::Energy => view! { <energy::EnergyTab /> }.into_any(),
                     Tab::Tools => view! { <tools::ToolsTab /> }.into_any(),
-                    _ => view! { <p class="muted">"Coming in a later phase."</p> }.into_any(),
+                    Tab::Controls => view! { <controls::ControlsTab /> }.into_any(),
                 }}
             </section>
             <footer class="footer">

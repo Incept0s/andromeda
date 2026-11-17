@@ -483,3 +483,5 @@ body.opaque { color-scheme: dark; }
 .btn.danger { color: var(--red); }
 .check.clean { align-items: flex-start; }
 .check.clean input { margin-top: 3px; }
+.card .setting { padding: 8px 0; }
+.card .setting:last-child { border-bottom: 0; }
