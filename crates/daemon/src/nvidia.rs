@@ -5,7 +5,7 @@
 //! only way to read usage, VRAM, clocks and temperature. NVML is loaded at
 //! runtime: on machines without the NVIDIA driver `init()` returns `None` and
 //! no NVIDIA metrics exist. Reading may wake a sleeping dGPU; the user chose
-//! to accept that (docs/SPEC.md, section 0).
+//! to accept that.
 
 use std::ffi::OsStr;
 

@@ -11,3 +11,5 @@ extension/*/schemas/gschemas.compiled
 *.swp
 *~
 .DS_Store
+# Internal planning notes, kept local.
+/docs/SPEC.md

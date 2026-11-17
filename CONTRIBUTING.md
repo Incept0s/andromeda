@@ -35,7 +35,6 @@ scripts/run.sh            # starts the service and opens the panel
 | `frontend` | The panel's interface (Leptos, compiled to WebAssembly by Trunk) |
 | `extension` | The GNOME Shell extension (top bar, placement, clipboard, Alt+Tab) |
 | `data`, `packaging`, `scripts` | Icons, service files, RPM spec, build scripts |
-| `docs/SPEC.md` | The full specification and the decisions behind it |
 
 ## Rules of the house
 
