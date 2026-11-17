@@ -10,16 +10,20 @@ mod alerts;
 mod config_file;
 mod desktop;
 mod drives;
+mod icons;
+mod mixer;
 mod netinfo;
 mod nvidia;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use andromeda_core::config::Config;
 use andromeda_core::dbus;
+use andromeda_core::info::MixerState;
 use andromeda_core::metrics::MetricInfo;
 use andromeda_core::procs::Procs;
 use andromeda_core::sensors::Sensors;
@@ -41,6 +45,10 @@ struct Daemon {
     session: zbus::Connection,
     system: Option<zbus::Connection>,
     procs: Procs,
+    mixer: MixerState,
+    mixer_tx: Option<mpsc::Sender<mixer::Cmd>>,
+    /// Shared with the mixer thread so a settings change applies at once.
+    max_volume: Arc<AtomicU32>,
     quit: Arc<Notify>,
 }
 
@@ -49,6 +57,12 @@ fn unix_now() -> i64 {
 }
 
 impl Daemon {
+    fn mixer_cmd(&self, cmd: mixer::Cmd) {
+        if let Some(tx) = &self.mixer_tx {
+            let _ = tx.send(cmd);
+        }
+    }
+
     async fn awake_on(&mut self, minutes: u32) -> fdo::Result<()> {
         if self.awake_cookie.is_none() {
             let sm = desktop::SessionManagerProxy::new(&self.session).await?;
@@ -136,9 +150,36 @@ impl Daemon {
             self.awake_off().await;
             let _ = self.awake_until_changed(&e).await;
         }
+        self.max_volume.store(c.mixer.max_volume, Ordering::Relaxed);
         self.config = c;
         let _ = self.config_changed(&e).await;
         Ok(())
+    }
+
+    /// Volume mixer state as JSON (`info::MixerState`).
+    #[zbus(property)]
+    fn mixer(&self) -> String {
+        serde_json::to_string(&self.mixer).unwrap_or_default()
+    }
+
+    /// Sets an app's volume in percent (0..=configured maximum).
+    fn mixer_volume(&self, app: &str, percent: f64) {
+        self.mixer_cmd(mixer::Cmd::Volume(app.into(), percent));
+    }
+
+    fn mixer_mute(&self, app: &str, mute: bool) {
+        self.mixer_cmd(mixer::Cmd::Mute(app.into(), mute));
+    }
+
+    /// Moves all of an app's streams to the output device `sink`.
+    fn mixer_output(&self, app: &str, sink: &str) {
+        self.mixer_cmd(mixer::Cmd::Output(app.into(), sink.into()));
+    }
+
+    /// Sets the system default device; `kind` is "output" or "input".
+    fn mixer_default(&self, kind: &str, name: &str) {
+        let cmd = if kind == "input" { mixer::Cmd::DefaultInput(name.into()) } else { mixer::Cmd::DefaultOutput(name.into()) };
+        self.mixer_cmd(cmd);
     }
 
     /// -1 = off, 0 = on until turned off, otherwise the end (Unix seconds).
@@ -247,6 +288,17 @@ async fn main() -> zbus::Result<()> {
     let session = connection::Builder::session().build().await?;
     let system = connection::Builder::system().build().await.ok();
     let start_awake = config.features.awake && config.awake.start_with_app;
+    let max_volume = Arc::new(AtomicU32::new(config.mixer.max_volume));
+    // The mixer thread only exists while the feature is on at startup.
+    // shortcut: toggling the feature takes effect after a daemon restart.
+    let mixer_parts = config.features.mixer.then(|| {
+        let mv = max_volume.clone();
+        mixer::spawn(move || f64::from(mv.load(Ordering::Relaxed)))
+    });
+    let (mixer_tx, mixer_rx) = match mixer_parts {
+        Some((tx, rx)) => (Some(tx), Some(rx)),
+        None => (None, None),
+    };
     let default_minutes = config.awake.default_minutes;
     let daemon = Daemon {
         metrics,
@@ -258,6 +310,9 @@ async fn main() -> zbus::Result<()> {
         session: session.clone(),
         system,
         procs: Procs::new(Path::new("/proc")),
+        mixer: MixerState::default(),
+        mixer_tx,
+        max_volume,
         quit: quit.clone(),
     };
     session.object_server().at(dbus::DAEMON_PATH, daemon).await?;
@@ -270,6 +325,17 @@ async fn main() -> zbus::Result<()> {
             let _ = d.awake_until_changed(iface.signal_emitter()).await;
         }
     }
+
+    // Publish every mixer snapshot as soon as the mixer thread sends it.
+    let mixer_watch = async {
+        let Some(mut rx) = mixer_rx else { return std::future::pending().await };
+        while rx.changed().await.is_ok() {
+            let state = rx.borrow_and_update().clone();
+            let mut d = iface.get_mut().await;
+            d.mixer = state;
+            let _ = d.mixer_changed(iface.signal_emitter()).await;
+        }
+    };
 
     let mut alerts = alerts::Alerts::default();
     let sampler = async {
@@ -307,6 +373,7 @@ async fn main() -> zbus::Result<()> {
 
     tokio::select! {
         _ = sampler => {}
+        _ = mixer_watch => {}
         _ = quit.notified() => {}
     }
     // Exit right away instead of returning: NVIDIA's driver library leaves a

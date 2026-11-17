@@ -146,10 +146,12 @@ impl Procs {
 
 /// `Name=` from the app's .desktop file, else the key itself.
 pub fn display_name(key: &str) -> String {
-    desktop_name(key).unwrap_or_else(|| key.to_owned())
+    desktop_entry(key).map(|(n, _)| n).unwrap_or_else(|| key.to_owned())
 }
 
-fn desktop_name(id: &str) -> Option<String> {
+/// (`Name=`, `Icon=`) of `<id>.desktop` (also tried lowercase) from the
+/// user, Flatpak and system application folders.
+pub fn desktop_entry(id: &str) -> Option<(String, Option<String>)> {
     let home = std::env::var("HOME").unwrap_or_default();
     let dirs = [
         format!("{home}/.local/share/applications"),
@@ -157,8 +159,16 @@ fn desktop_name(id: &str) -> Option<String> {
         "/var/lib/flatpak/exports/share/applications".into(),
         "/usr/share/applications".into(),
     ];
-    let text = dirs.iter().find_map(|d| fs::read_to_string(format!("{d}/{id}.desktop")).ok())?;
-    text.lines().find_map(|l| l.strip_prefix("Name=")).map(str::to_owned)
+    let ids = [id.to_owned(), id.to_lowercase()];
+    let text = dirs
+        .iter()
+        .flat_map(|d| ids.iter().map(move |i| format!("{d}/{i}.desktop")))
+        .find_map(|p| fs::read_to_string(p).ok())?;
+    // Only the main [Desktop Entry] group, not actions.
+    let main = text.split("\n[").next().unwrap_or(&text);
+    let name = main.lines().find_map(|l| l.strip_prefix("Name="))?.to_owned();
+    let icon = main.lines().find_map(|l| l.strip_prefix("Icon=")).map(str::to_owned);
+    Some((name, icon))
 }
 
 #[cfg(test)]

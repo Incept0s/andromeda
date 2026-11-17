@@ -60,3 +60,38 @@ pub struct SpeedResult {
     pub download: f64,
     pub upload: f64,
 }
+
+/// One row of the Volume mixer: every audio stream of one app.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MixApp {
+    /// Stable per app (Flatpak id, binary name or app name).
+    pub key: String,
+    pub name: String,
+    /// `data:` URL of the app icon, or empty.
+    pub icon: String,
+    /// 0..=200, average of its streams; 100 = unchanged.
+    pub volume: f64,
+    pub muted: bool,
+    /// At least one stream is running (not paused/corked).
+    pub playing: bool,
+    /// Sink (output device) name of its first stream.
+    pub output: String,
+    pub streams: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct MixerState {
+    /// False when PipeWire/PulseAudio is not reachable.
+    pub connected: bool,
+    pub apps: Vec<MixApp>,
+    pub outputs: Vec<AudioDevice>,
+    pub inputs: Vec<AudioDevice>,
+    pub default_output: String,
+    pub default_input: String,
+}
