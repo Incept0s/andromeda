@@ -27,12 +27,18 @@ trait Daemon {
     fn quit(&self) -> zbus::Result<()>;
 }
 
-/// When the panel last hid because it lost focus.
+/// When the panel was last shown, and when it last hid because it lost focus.
 #[derive(Default)]
-struct BlurHide(Mutex<Option<Instant>>);
+struct PanelTimes {
+    shown: Mutex<Option<Instant>>,
+    blur_hidden: Mutex<Option<Instant>>,
+}
 
 fn show_panel(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        if let Ok(mut g) = app.state::<PanelTimes>().shown.lock() {
+            *g = Some(Instant::now());
+        }
         let _ = w.show();
         let _ = w.set_focus();
     }
@@ -47,7 +53,7 @@ fn toggle_panel(app: &AppHandle) {
     // A click on the top-bar icon can take focus from the panel first, which
     // hides it via the blur handler. Without this guard, that same click
     // would re-open it immediately.
-    let recently = app.state::<BlurHide>().0.lock().ok().and_then(|g| *g);
+    let recently = app.state::<PanelTimes>().blur_hidden.lock().ok().and_then(|g| *g);
     if recently.is_some_and(|t| t.elapsed() < Duration::from_millis(300)) {
         return;
     }
@@ -130,7 +136,7 @@ fn main() {
                 show_panel(app);
             }
         }))
-        .manage(BlurHide::default())
+        .manage(PanelTimes::default())
         .invoke_handler(tauri::generate_handler![quit, open_settings])
         .on_window_event(|window, event| {
             if window.label() != "main" {
@@ -144,12 +150,24 @@ fn main() {
                 }
                 // Behave like a popup: clicking elsewhere hides it.
                 WindowEvent::Focused(false) => {
-                    if window.is_visible().unwrap_or(false) {
-                        if let Ok(mut g) = window.state::<BlurHide>().0.lock() {
-                            *g = Some(Instant::now());
-                        }
-                        let _ = window.hide();
+                    let times = window.state::<PanelTimes>();
+                    // Right after showing, Mutter can focus the window and
+                    // take focus back within a second (seen when launched
+                    // from a terminal). Hiding then would make the panel
+                    // vanish before the user sees it.
+                    let just_shown = times
+                        .shown
+                        .lock()
+                        .ok()
+                        .and_then(|g| *g)
+                        .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
+                    if just_shown || !window.is_visible().unwrap_or(false) {
+                        return;
                     }
+                    if let Ok(mut g) = times.blur_hidden.lock() {
+                        *g = Some(Instant::now());
+                    }
+                    let _ = window.hide();
                 }
                 _ => {}
             }
