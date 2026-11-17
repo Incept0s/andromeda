@@ -40,11 +40,24 @@ pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[Strin
         "speed_test" => json(&netinfo::speed_test().await?),
         "eject" => drives::eject(system(&ctx)?, arg(0)?).await.map(|_| String::new()),
         "ocr" => {
-            let shot = portal::screenshot(&ctx.session).await?;
+            // The panel is hidden by now, so failures are told by notification.
+            let notify_err = |e: String| async {
+                if e != "Cancelled" {
+                    desktop::notify(&ctx.session, "Could not copy text", &e).await;
+                }
+                e
+            };
+            let shot = match portal::screenshot(&ctx.session).await {
+                Ok(s) => s,
+                Err(e) => return Err(notify_err(e).await),
+            };
             let result = ocr::recognise(&shot).await;
             // The capture was only made for this; don't leave it behind.
             let _ = std::fs::remove_file(&shot);
-            let text = result?;
+            let text = match result {
+                Ok(t) => t,
+                Err(e) => return Err(notify_err(e).await),
+            };
             set_clipboard(e, &text, "text/plain;charset=utf-8").await;
             let preview: String = text.chars().take(80).collect();
             desktop::notify(&ctx.session, "Text copied", &preview).await;
@@ -53,6 +66,7 @@ pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[Strin
         "pick_color" => {
             let hex = portal::pick_color(&ctx.session).await?;
             set_clipboard(e, &hex, "text/plain;charset=utf-8").await;
+            desktop::notify(&ctx.session, "Color copied", &hex).await;
             Ok(hex)
         }
         "convert_options" => json(&ctx.tools.lock().await.options(Path::new(arg(0)?)).await),

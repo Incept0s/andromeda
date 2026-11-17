@@ -15,6 +15,7 @@ mod network;
 mod settings;
 mod system;
 mod tauri;
+mod tools;
 mod widgets;
 
 use std::collections::{HashMap, VecDeque};
@@ -55,6 +56,11 @@ impl Data {
         self.config.set(Some(c.clone()));
         tauri::call("set_config", ConfigArg { config: c });
     }
+}
+
+#[derive(serde::Serialize)]
+struct Sticky {
+    sticky: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -199,6 +205,15 @@ fn Panel() -> impl IntoView {
         }
     });
 
+    // While Tools is open the panel stays when it loses focus, so files can
+    // be dragged in from another window. Escape always closes the panel.
+    Effect::new(move |_| tauri::call("set_sticky", Sticky { sticky: tab.get() == Tab::Tools }));
+    let _ = window_event_listener(leptos::ev::keydown, |e| {
+        if e.key() == "Escape" {
+            tauri::call("hide", ());
+        }
+    });
+
     view! {
         <main class="panel">
             <header class="logo"><img src="icons/andromeda-symbolic.svg" alt="" /></header>
@@ -223,6 +238,7 @@ fn Panel() -> impl IntoView {
                     Tab::Network => view! { <network::NetworkTab /> }.into_any(),
                     Tab::Disk => view! { <disk::DiskTab /> }.into_any(),
                     Tab::Energy => view! { <energy::EnergyTab /> }.into_any(),
+                    Tab::Tools => view! { <tools::ToolsTab /> }.into_any(),
                     _ => view! { <p class="muted">"Coming in a later phase."</p> }.into_any(),
                 }}
             </section>

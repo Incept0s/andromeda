@@ -22,6 +22,27 @@ use zbus::{connection, interface};
 struct PanelTimes {
     shown: Mutex<Option<Instant>>,
     blur_hidden: Mutex<Option<Instant>>,
+    /// While true (Tools tab open) the panel stays when it loses focus, so
+    /// files can be dragged onto it from another window.
+    sticky: Mutex<bool>,
+}
+
+pub fn hide_panel(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+}
+
+#[tauri::command]
+fn hide(app: AppHandle) {
+    hide_panel(&app);
+}
+
+#[tauri::command]
+fn set_sticky(app: AppHandle, sticky: bool) {
+    if let Ok(mut g) = app.state::<PanelTimes>().sticky.lock() {
+        *g = sticky;
+    }
 }
 
 fn show_panel(app: &AppHandle) {
@@ -172,6 +193,29 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             quit,
             open_settings,
+            hide,
+            set_sticky,
+            commands::clipboard_list,
+            commands::clipboard_copy,
+            commands::clipboard_pin,
+            commands::clipboard_delete,
+            commands::clipboard_clear,
+            commands::copy_text,
+            commands::shelf_list,
+            commands::shelf_add,
+            commands::shelf_remove,
+            commands::shelf_copy,
+            commands::ocr,
+            commands::pick_color,
+            commands::convert_options,
+            commands::convert,
+            commands::cleaner_scan,
+            commands::cleaner_run,
+            commands::pkg_search,
+            commands::pkg_action,
+            commands::pkg_updates,
+            commands::pkg_update_all,
+            commands::open_file,
             commands::metrics,
             commands::history,
             commands::config,
@@ -219,7 +263,8 @@ fn main() {
                         .ok()
                         .and_then(|g| *g)
                         .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
-                    if just_shown || !window.is_visible().unwrap_or(false) {
+                    let sticky = times.sticky.lock().is_ok_and(|g| *g);
+                    if just_shown || sticky || !window.is_visible().unwrap_or(false) {
                         return;
                     }
                     if let Ok(mut g) = times.blur_hidden.lock() {

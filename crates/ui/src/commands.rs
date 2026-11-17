@@ -9,6 +9,7 @@ use andromeda_core::config::Config;
 use andromeda_core::info::{Check, Drive, Interface, MixerState, NetApp, SpeedResult};
 use andromeda_core::metrics::{Group, MetricInfo, Unit};
 use andromeda_core::procs::AppUsage;
+use andromeda_core::tools::{CleanItem, ClipEntry, ConvertOption, Package, ShelfItem};
 use serde::de::DeserializeOwned;
 use tauri::{AppHandle, Manager};
 use zbus::proxy;
@@ -49,6 +50,14 @@ pub trait Daemon {
     fn mixer_output(&self, app: &str, sink: &str) -> zbus::Result<()>;
     fn mixer_default(&self, kind: &str, name: &str) -> zbus::Result<()>;
     fn system_check(&self) -> zbus::Result<String>;
+    fn clipboard_list(&self, query: &str) -> zbus::Result<String>;
+    fn clipboard_copy(&self, id: u64) -> zbus::Result<()>;
+    fn clipboard_pin(&self, id: u64, pinned: bool) -> zbus::Result<()>;
+    fn clipboard_delete(&self, id: u64) -> zbus::Result<()>;
+    fn clipboard_clear(&self) -> zbus::Result<()>;
+    fn shelf_list(&self) -> zbus::Result<String>;
+    fn shelf_add(&self, paths: &[&str]) -> zbus::Result<()>;
+    fn shelf_remove(&self, path: &str) -> zbus::Result<()>;
     fn quit(&self) -> zbus::Result<()>;
 }
 
@@ -223,4 +232,125 @@ pub fn open_releases() -> R<()> {
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+// ---------- Tools ----------
+
+#[tauri::command]
+pub async fn clipboard_list(app: AppHandle, query: String) -> R<Vec<ClipEntry>> {
+    json(daemon(&app).await?.clipboard_list(&query).await.map_err(err)?)
+}
+
+#[tauri::command]
+pub async fn clipboard_copy(app: AppHandle, id: u64) -> R<()> {
+    daemon(&app).await?.clipboard_copy(id).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn clipboard_pin(app: AppHandle, id: u64, pinned: bool) -> R<()> {
+    daemon(&app).await?.clipboard_pin(id, pinned).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn clipboard_delete(app: AppHandle, id: u64) -> R<()> {
+    daemon(&app).await?.clipboard_delete(id).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn clipboard_clear(app: AppHandle) -> R<()> {
+    daemon(&app).await?.clipboard_clear().await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn copy_text(app: AppHandle, text: String) -> R<()> {
+    job(&app, "copy_text", &[&text]).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn shelf_list(app: AppHandle) -> R<Vec<ShelfItem>> {
+    json(daemon(&app).await?.shelf_list().await.map_err(err)?)
+}
+
+#[tauri::command]
+pub async fn shelf_add(app: AppHandle, paths: Vec<String>) -> R<()> {
+    let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+    daemon(&app).await?.shelf_add(&refs).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn shelf_remove(app: AppHandle, path: String) -> R<()> {
+    daemon(&app).await?.shelf_remove(&path).await.map_err(err)
+}
+
+/// Puts the file on the clipboard so it can be pasted in Files.
+#[tauri::command]
+pub async fn shelf_copy(app: AppHandle, path: String) -> R<()> {
+    job(&app, "shelf_copy", &[&path]).await.map(|_| ())
+}
+
+/// The panel hides first: it must not end up in the capture.
+#[tauri::command]
+pub async fn ocr(app: AppHandle) -> R<String> {
+    crate::hide_panel(&app);
+    job(&app, "ocr", &[]).await
+}
+
+#[tauri::command]
+pub async fn pick_color(app: AppHandle) -> R<String> {
+    crate::hide_panel(&app);
+    job(&app, "pick_color", &[]).await
+}
+
+#[tauri::command]
+pub async fn convert_options(app: AppHandle, path: String) -> R<Vec<ConvertOption>> {
+    json(job(&app, "convert_options", &[&path]).await?)
+}
+
+/// Returns the new file's path (empty for "Extract text").
+#[tauri::command]
+pub async fn convert(app: AppHandle, path: String, target: String) -> R<String> {
+    job(&app, "convert", &[&path, &target]).await
+}
+
+#[tauri::command]
+pub async fn cleaner_scan(app: AppHandle) -> R<Vec<CleanItem>> {
+    json(job(&app, "clean_scan", &[]).await?)
+}
+
+/// Returns the bytes freed in the home folder.
+#[tauri::command]
+pub async fn cleaner_run(app: AppHandle, ids: Vec<u32>) -> R<f64> {
+    let ids: Vec<String> = ids.iter().map(u32::to_string).collect();
+    let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+    Ok(job(&app, "clean_run", &refs).await?.parse().unwrap_or(0.0))
+}
+
+#[tauri::command]
+pub async fn pkg_search(app: AppHandle, source: String, query: String) -> R<Vec<Package>> {
+    json(job(&app, "pkg_search", &[&source, &query]).await?)
+}
+
+#[tauri::command]
+pub async fn pkg_action(app: AppHandle, source: String, action: String, id: String) -> R<()> {
+    job(&app, "pkg_action", &[&source, &action, &id]).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn pkg_updates(app: AppHandle) -> R<Vec<Package>> {
+    json(job(&app, "pkg_updates", &[]).await?)
+}
+
+#[tauri::command]
+pub async fn pkg_update_all(app: AppHandle) -> R<()> {
+    job(&app, "pkg_update_all", &[]).await.map(|_| ())
+}
+
+/// Opens a file with its default app (a shelf item).
+#[tauri::command]
+pub fn open_file(path: String) -> R<()> {
+    let p = std::path::Path::new(&path);
+    if !p.is_absolute() || !p.exists() {
+        return Err("not found".into());
+    }
+    std::process::Command::new("gio").arg("open").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
