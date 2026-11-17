@@ -8,13 +8,20 @@
 
 mod alerts;
 mod check;
+mod cleaner;
+mod clipboard;
 mod config_file;
+mod convert;
 mod desktop;
 mod drives;
 mod icons;
+mod jobs;
 mod mixer;
 mod netinfo;
 mod nvidia;
+mod ocr;
+mod packages;
+mod portal;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -50,6 +57,10 @@ struct Daemon {
     mixer_tx: Option<mpsc::Sender<mixer::Cmd>>,
     /// Shared with the mixer thread so a settings change applies at once.
     max_volume: Arc<AtomicU32>,
+    clipboard: clipboard::Clipboard,
+    shelf: clipboard::Shelf,
+    jobs: Arc<jobs::Ctx>,
+    next_job: u32,
     quit: Arc<Notify>,
 }
 
@@ -249,12 +260,6 @@ impl Daemon {
         serde_json::to_string(&apps).unwrap_or_default()
     }
 
-    /// Runs the Cloudflare speed test (about 20 s), JSON `info::SpeedResult`.
-    async fn speed_test(&self) -> fdo::Result<String> {
-        let r = netinfo::speed_test().await.map_err(fdo::Error::Failed)?;
-        Ok(serde_json::to_string(&r).unwrap_or_default())
-    }
-
     /// Drives with SMART data, as JSON (`Vec<info::Drive>`).
     async fn drives(&self) -> fdo::Result<String> {
         let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
@@ -262,10 +267,80 @@ impl Daemon {
         Ok(serde_json::to_string(&list).unwrap_or_default())
     }
 
-    /// Unmounts and powers off a drive (UDisks2 object path).
-    async fn eject(&self, drive: &str) -> fdo::Result<()> {
-        let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
-        drives::eject(sys, drive).await.map_err(fdo::Error::Failed)
+    /// Asks the Shell extension to set the clipboard (`mime` is usually
+    /// text/plain; files use x-special/gnome-copied-files).
+    #[zbus(signal)]
+    async fn set_clipboard(e: &SignalEmitter<'_>, text: &str, mime: &str) -> zbus::Result<()>;
+
+    /// A background job finished; `result` is text/JSON or the error.
+    #[zbus(signal)]
+    async fn job_done(e: &SignalEmitter<'_>, id: u32, ok: bool, result: &str) -> zbus::Result<()>;
+
+    /// Starts long-running work in the background and returns its id at
+    /// once (see jobs.rs for the kinds). The end is reported by `JobDone`.
+    fn job(&mut self, kind: String, args: Vec<String>) -> u32 {
+        self.next_job += 1;
+        let id = self.next_job;
+        let ctx = self.jobs.clone();
+        tokio::spawn(async move {
+            let Ok(e) = SignalEmitter::new(&ctx.session, dbus::DAEMON_PATH) else { return };
+            let (ok, result) = match jobs::run(ctx.clone(), &e, &kind, &args).await {
+                Ok(r) => (true, r),
+                Err(err) => (false, err),
+            };
+            let _ = Daemon::job_done(&e, id, ok, &result).await;
+        });
+        id
+    }
+
+    /// Called by the Shell extension for every text copy.
+    fn clipboard_add(&mut self, text: &str) {
+        if self.config.features.clipboard {
+            self.clipboard.add(text, unix_now());
+        }
+    }
+
+    /// History as JSON (`Vec<tools::ClipEntry>`), pinned first, filtered
+    /// by `query` (case-insensitive; empty = all).
+    fn clipboard_list(&self, query: &str) -> String {
+        let q = query.to_lowercase();
+        let mut v: Vec<_> = self.clipboard.entries.iter().filter(|e| q.is_empty() || e.text.to_lowercase().contains(&q)).cloned().collect();
+        v.sort_by_key(|e| !e.pinned);
+        serde_json::to_string(&v).unwrap_or_default()
+    }
+
+    async fn clipboard_copy(&self, id: u64, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
+        if let Some(t) = self.clipboard.text(id) {
+            jobs::set_clipboard(&e, &t, "text/plain;charset=utf-8").await;
+        }
+    }
+
+    fn clipboard_pin(&mut self, id: u64, pinned: bool) {
+        self.clipboard.pin(id, pinned);
+    }
+
+    fn clipboard_delete(&mut self, id: u64) {
+        self.clipboard.delete(id);
+    }
+
+    /// Clears the history except pinned entries.
+    fn clipboard_clear(&mut self) {
+        self.clipboard.clear();
+    }
+
+    /// Shelf contents as JSON (`Vec<tools::ShelfItem>`).
+    fn shelf_list(&self) -> String {
+        serde_json::to_string(&self.shelf.items).unwrap_or_default()
+    }
+
+    fn shelf_add(&mut self, paths: Vec<String>) {
+        for p in paths {
+            self.shelf.add(&p);
+        }
+    }
+
+    fn shelf_remove(&mut self, path: &str) {
+        self.shelf.remove(path);
     }
 
     /// Settings → System check, as JSON (`Vec<info::Check>`).
@@ -315,11 +390,20 @@ async fn main() -> zbus::Result<()> {
         awake_until: -1,
         awake_cookie: None,
         session: session.clone(),
-        system,
+        system: system.clone(),
         procs: Procs::new(Path::new("/proc")),
         mixer: MixerState::default(),
         mixer_tx,
         max_volume,
+        clipboard: clipboard::Clipboard::load(),
+        shelf: clipboard::Shelf::default(),
+        jobs: Arc::new(jobs::Ctx {
+            session: session.clone(),
+            system: system.clone(),
+            tools: Default::default(),
+            cleaner: Default::default(),
+        }),
+        next_job: 0,
         quit: quit.clone(),
     };
     session.object_server().at(dbus::DAEMON_PATH, daemon).await?;

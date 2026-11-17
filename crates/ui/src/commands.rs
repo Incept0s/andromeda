@@ -40,9 +40,10 @@ pub trait Daemon {
     fn top_apps(&self, limit: u32) -> zbus::Result<Vec<(String, String, f64, f64, u32)>>;
     fn interfaces(&self) -> zbus::Result<String>;
     fn network_apps(&self) -> zbus::Result<String>;
-    fn speed_test(&self) -> zbus::Result<String>;
     fn drives(&self) -> zbus::Result<String>;
-    fn eject(&self, drive: &str) -> zbus::Result<()>;
+    fn job(&self, kind: &str, args: &[&str]) -> zbus::Result<u32>;
+    #[zbus(signal)]
+    fn job_done(&self, id: u32, ok: bool, result: String) -> zbus::Result<()>;
     fn mixer_volume(&self, app: &str, percent: f64) -> zbus::Result<()>;
     fn mixer_mute(&self, app: &str, mute: bool) -> zbus::Result<()>;
     fn mixer_output(&self, app: &str, sink: &str) -> zbus::Result<()>;
@@ -140,9 +141,27 @@ pub async fn network_apps(app: AppHandle) -> R<Vec<NetApp>> {
     json(daemon(&app).await?.network_apps().await.map_err(err)?)
 }
 
+/// Runs a daemon background job and waits for its `JobDone` signal, so
+/// the frontend sees one ordinary call. Subscribing before starting the
+/// job means the signal cannot be missed.
+pub async fn job(app: &AppHandle, kind: &str, args: &[&str]) -> R<String> {
+    use futures_util::StreamExt;
+    let d = daemon(app).await?;
+    let mut done = d.receive_job_done().await.map_err(err)?;
+    let id = d.job(kind, args).await.map_err(err)?;
+    while let Some(sig) = done.next().await {
+        if let Ok(a) = sig.args()
+            && a.id == id
+        {
+            return if a.ok { Ok(a.result) } else { Err(a.result) };
+        }
+    }
+    Err("The Andromeda service stopped".into())
+}
+
 #[tauri::command]
 pub async fn speed_test(app: AppHandle) -> R<SpeedResult> {
-    json(daemon(&app).await?.speed_test().await.map_err(err)?)
+    json(job(&app, "speed_test", &[]).await?)
 }
 
 #[tauri::command]
@@ -152,7 +171,7 @@ pub async fn drives(app: AppHandle) -> R<Vec<Drive>> {
 
 #[tauri::command]
 pub async fn eject(app: AppHandle, drive: String) -> R<()> {
-    daemon(&app).await?.eject(&drive).await.map_err(err)
+    job(&app, "eject", &[&drive]).await.map(|_| ())
 }
 
 #[tauri::command]
