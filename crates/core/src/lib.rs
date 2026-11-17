@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod cpu;
+pub mod info;
 pub mod metrics;
 pub mod procs;
 #[cfg(unix)]

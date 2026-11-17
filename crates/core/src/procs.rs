@@ -138,10 +138,15 @@ impl Procs {
         if let Some(n) = self.names.get(key) {
             return n.clone();
         }
-        let n = desktop_name(key).unwrap_or_else(|| key.to_owned());
+        let n = display_name(key);
         self.names.insert(key.to_owned(), n.clone());
         n
     }
+}
+
+/// `Name=` from the app's .desktop file, else the key itself.
+pub fn display_name(key: &str) -> String {
+    desktop_name(key).unwrap_or_else(|| key.to_owned())
 }
 
 fn desktop_name(id: &str) -> Option<String> {

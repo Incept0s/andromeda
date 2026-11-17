@@ -81,6 +81,7 @@ name = "andromedad"
 version = "0.1.0"
 dependencies = [
  "andromeda-core",
+ "libc",
  "nvml-wrapper",
  "serde_json",
  "tokio",

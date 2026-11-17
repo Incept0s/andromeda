@@ -9,6 +9,8 @@
 mod alerts;
 mod config_file;
 mod desktop;
+mod drives;
+mod netinfo;
 mod nvidia;
 
 use std::collections::{HashMap, VecDeque};
@@ -191,6 +193,37 @@ impl Daemon {
             .take(limit as usize)
             .map(|a| (a.key, a.name, a.cpu, a.memory, a.processes))
             .collect()
+    }
+
+    /// Network interfaces with addresses, as JSON (`Vec<info::Interface>`).
+    fn interfaces(&self) -> String {
+        serde_json::to_string(&netinfo::interfaces()).unwrap_or_default()
+    }
+
+    /// Apps with open connections, as JSON (`Vec<info::NetApp>`).
+    async fn network_apps(&self) -> String {
+        // Scanning /proc/*/fd takes a few ms; keep it off the async thread.
+        let apps = tokio::task::spawn_blocking(netinfo::apps).await.unwrap_or_default();
+        serde_json::to_string(&apps).unwrap_or_default()
+    }
+
+    /// Runs the Cloudflare speed test (about 20 s), JSON `info::SpeedResult`.
+    async fn speed_test(&self) -> fdo::Result<String> {
+        let r = netinfo::speed_test().await.map_err(fdo::Error::Failed)?;
+        Ok(serde_json::to_string(&r).unwrap_or_default())
+    }
+
+    /// Drives with SMART data, as JSON (`Vec<info::Drive>`).
+    async fn drives(&self) -> fdo::Result<String> {
+        let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
+        let list = drives::list(sys).await?;
+        Ok(serde_json::to_string(&list).unwrap_or_default())
+    }
+
+    /// Unmounts and powers off a drive (UDisks2 object path).
+    async fn eject(&self, drive: &str) -> fdo::Result<()> {
+        let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
+        drives::eject(sys, drive).await.map_err(fdo::Error::Failed)
     }
 
     /// Exits the daemon. The panel's Quit button calls this.
