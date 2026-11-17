@@ -18,6 +18,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import * as Switcher from './switcher.js';
+
 const PANEL_NAME = 'io.github.incept0s.Andromeda.Panel';
 const PANEL_PATH = '/io/github/incept0s/Andromeda/Panel';
 const PANEL_IFACE = 'io.github.incept0s.Andromeda.Panel1';
@@ -72,10 +74,16 @@ export default class AndromedaExtension extends Extension {
                 const changed = params.deep_unpack()[1];
                 if ('TopBar' in changed)
                     this._setText(changed.TopBar.deep_unpack());
+                if ('Config' in changed)
+                    this._applyConfig(changed.Config.deep_unpack());
             });
         // Fetch the current text when the daemon appears; clear it when it goes.
+        // Without the daemon, Alt+Tab stays GNOME's own (fail safe).
         this._watchId = Gio.bus_watch_name(Gio.BusType.SESSION, DAEMON_NAME, Gio.BusNameWatcherFlags.NONE,
-            () => this._fetchText(), () => this._setText(''));
+            () => this._fetchState(), () => {
+                this._setText('');
+                this._setSwitcher(false);
+            });
     }
 
     disable() {
@@ -86,6 +94,7 @@ export default class AndromedaExtension extends Extension {
         Gio.DBus.session.signal_unsubscribe(this._setClipboardId);
         Gio.DBus.session.signal_unsubscribe(this._propsId);
         Gio.bus_unwatch_name(this._watchId);
+        this._setSwitcher(false);
         this._label = null;
         this._button.destroy();
         this._button = null;
@@ -110,16 +119,37 @@ export default class AndromedaExtension extends Extension {
         this._label.visible = text.length > 0;
     }
 
-    _fetchText() {
-        Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, 'org.freedesktop.DBus.Properties', 'Get',
-            new GLib.Variant('(ss)', [DAEMON_IFACE, 'TopBar']), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null,
-            (conn, res) => {
+    _fetchState() {
+        const get = (prop, apply) => Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH,
+            'org.freedesktop.DBus.Properties', 'Get', new GLib.Variant('(ss)', [DAEMON_IFACE, prop]),
+            null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, (conn, res) => {
                 try {
-                    this._setText(conn.call_finish(res).deep_unpack()[0].deep_unpack());
+                    apply(conn.call_finish(res).deep_unpack()[0].deep_unpack());
                 } catch {
-                    this._setText('');
+                    // Daemon went away in between; the name watcher handles it.
                 }
             });
+        get('TopBar', t => this._setText(t));
+        get('Config', c => this._applyConfig(c));
+    }
+
+    /** Only the feature switch is read from the settings JSON. */
+    _applyConfig(json) {
+        try {
+            this._setSwitcher(JSON.parse(json).features?.switcher === true);
+        } catch {
+            this._setSwitcher(false);
+        }
+    }
+
+    _setSwitcher(on) {
+        if (on === Boolean(this._switcherOn))
+            return;
+        this._switcherOn = on;
+        if (on)
+            Switcher.enable();
+        else
+            Switcher.disable();
     }
 
     _onClipboardChanged(sel, type) {
