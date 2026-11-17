@@ -12,7 +12,7 @@
 [![Wayland](https://img.shields.io/badge/Wayland-only-ffbc00.svg)](https://wayland.freedesktop.org/)
 [![Packages](https://img.shields.io/badge/packages-RPM-f27121.svg)](../../releases)
 
-[![Skills](https://skillicons.dev/icons?i=linux,fedora,rust,tauri,wasm,js,html,css,bash&theme=dark)](https://skillicons.dev)
+[![Skills](https://skillicons.dev/icons?i=linux,redhat,rust,tauri,wasm,js,html,css,bash&theme=dark)](https://skillicons.dev)
 
 <img src="docs/screenshots/topbar.png" width="640" alt="Andromeda's numbers in the GNOME top bar">
 
