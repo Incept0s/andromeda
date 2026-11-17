@@ -2,11 +2,17 @@
 //
 // Andromeda top-bar button. Deliberately thin: it draws an icon, forwards
 // clicks to the panel over D-Bus, and moves the panel window under the icon,
-// because Wayland apps cannot position their own windows. No data
-// collection happens here.
+// because Wayland apps cannot position their own windows.
+//
+// Clipboard: Mutter offers no clipboard-manager protocol, so only code
+// inside the Shell sees copies made in other apps. This file forwards
+// copied text to the daemon (which stores it) and sets the clipboard when
+// the daemon asks. It keeps no history itself.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -18,6 +24,11 @@ const PANEL_IFACE = 'io.github.incept0s.Andromeda.Panel1';
 // Must match the main window title in crates/ui/tauri.conf.json. The
 // Settings window ("Andromeda Settings") is left where Mutter puts it.
 const PANEL_TITLE = 'Andromeda';
+const DAEMON_NAME = 'io.github.incept0s.Andromeda';
+const DAEMON_PATH = '/io/github/incept0s/Andromeda';
+const DAEMON_IFACE = 'io.github.incept0s.Andromeda1';
+// Password managers mark secrets with this type; they never enter history.
+const SECRET_HINT = 'x-kde-passwordManagerHint';
 
 export default class AndromedaExtension extends Extension {
     enable() {
@@ -36,11 +47,21 @@ export default class AndromedaExtension extends Extension {
         // show creates a new MetaWindow and we place it again.
         this._windowCreatedId = global.display.connect('window-created',
             (_display, win) => this._onWindowCreated(win));
+
+        this._selection = global.display.get_selection();
+        this._ownerChangedId = this._selection.connect('owner-changed',
+            (sel, type) => this._onClipboardChanged(sel, type));
+        this._setClipboardId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, DAEMON_IFACE,
+            'SetClipboard', DAEMON_PATH, null, Gio.DBusSignalFlags.NONE,
+            (_c, _s, _p, _i, _n, params) => this._setClipboard(...params.deep_unpack()));
     }
 
     disable() {
         global.display.disconnect(this._windowCreatedId);
         this._windowCreatedId = 0;
+        this._selection.disconnect(this._ownerChangedId);
+        this._selection = null;
+        Gio.DBus.session.signal_unsubscribe(this._setClipboardId);
         this._button.destroy();
         this._button = null;
     }
@@ -55,6 +76,28 @@ export default class AndromedaExtension extends Extension {
                     console.warn(`Andromeda: Toggle failed: ${e.message}`);
                 }
             });
+    }
+
+    _onClipboardChanged(sel, type) {
+        if (type !== Meta.SelectionType.SELECTION_CLIPBOARD)
+            return;
+        if (sel.get_mimetypes(type).includes(SECRET_HINT))
+            return;
+        St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (_clip, text) => {
+            if (!text)
+                return;
+            // Fire and forget: if the daemon is not running, nothing is kept.
+            Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, 'ClipboardAdd',
+                new GLib.Variant('(s)', [text]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
+        });
+    }
+
+    _setClipboard(text, mime) {
+        const clip = St.Clipboard.get_default();
+        if (mime.startsWith('text/plain'))
+            clip.set_text(St.ClipboardType.CLIPBOARD, text);
+        else
+            clip.set_content(St.ClipboardType.CLIPBOARD, mime, new GLib.Bytes(new TextEncoder().encode(text)));
     }
 
     _isAndromeda(win) {
