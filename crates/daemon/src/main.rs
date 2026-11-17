@@ -19,6 +19,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use andromeda_core::config::Config;
 use andromeda_core::dbus;
 use andromeda_core::metrics::MetricInfo;
+use andromeda_core::procs::Procs;
 use andromeda_core::sensors::Sensors;
 use tokio::sync::Notify;
 use zbus::object_server::SignalEmitter;
@@ -37,6 +38,7 @@ struct Daemon {
     awake_cookie: Option<u32>,
     session: zbus::Connection,
     system: Option<zbus::Connection>,
+    procs: Procs,
     quit: Arc<Notify>,
 }
 
@@ -179,6 +181,18 @@ impl Daemon {
         Ok(())
     }
 
+    /// Busiest apps since the previous call: (key, name, cpu %, memory
+    /// bytes, process count). Called by the Energy tab while it is visible;
+    /// the first call reports 0 % CPU.
+    fn top_apps(&mut self, limit: u32) -> Vec<(String, String, f64, f64, u32)> {
+        self.procs
+            .sample()
+            .into_iter()
+            .take(limit as usize)
+            .map(|a| (a.key, a.name, a.cpu, a.memory, a.processes))
+            .collect()
+    }
+
     /// Exits the daemon. The panel's Quit button calls this.
     async fn quit(&mut self) {
         self.awake_off().await;
@@ -210,6 +224,7 @@ async fn main() -> zbus::Result<()> {
         awake_cookie: None,
         session: session.clone(),
         system,
+        procs: Procs::new(Path::new("/proc")),
         quit: quit.clone(),
     };
     session.object_server().at(dbus::DAEMON_PATH, daemon).await?;

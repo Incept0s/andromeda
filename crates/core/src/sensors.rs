@@ -13,8 +13,10 @@
 //! NVIDIA is not here: its driver exposes nothing useful in sysfs, so the
 //! daemon reads it through NVML (crates/daemon/src/nvidia.rs).
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use crate::cpu::{self, CpuTimes};
 use crate::metrics::{Group, MetricInfo, Unit};
@@ -31,6 +33,12 @@ struct Battery {
     dir: PathBuf,
 }
 
+struct Mount {
+    /// Id segment: the block device name (`nvme0n1p3`), dots replaced.
+    key: String,
+    path: PathBuf,
+}
+
 pub struct Sensors {
     proc_: PathBuf,
     metrics: Vec<MetricInfo>,
@@ -41,6 +49,15 @@ pub struct Sensors {
     has_psi: bool,
     prev_total: Option<CpuTimes>,
     prev_cores: Vec<Option<CpuTimes>>,
+    /// Interfaces with a hardware device; only these count in totals, so
+    /// VPN traffic (also seen on the real interface) is not counted twice.
+    physical_nets: Vec<String>,
+    net_prev: HashMap<String, (u64, u64)>,
+    net_start: HashMap<String, (u64, u64)>,
+    mounts: Vec<Mount>,
+    disks: Vec<String>,
+    disk_prev: HashMap<String, (u64, u64)>,
+    last: Option<Instant>,
 }
 
 fn read_str(path: &Path) -> Option<String> {
@@ -154,12 +171,21 @@ impl Sensors {
             has_psi: proc_.join("pressure/memory").exists(),
             prev_total: None,
             prev_cores: Vec::new(),
+            physical_nets: Vec::new(),
+            net_prev: HashMap::new(),
+            net_start: HashMap::new(),
+            mounts: Vec::new(),
+            disks: Vec::new(),
+            disk_prev: HashMap::new(),
+            last: None,
         };
         s.discover_cpu(sys);
         s.discover_memory(sys);
         s.discover_gpus(sys);
         s.discover_hwmon(sys);
         s.discover_power(sys);
+        s.discover_network(sys);
+        s.discover_disks(sys);
         if proc_.join("uptime").exists() {
             s.metrics.push(MetricInfo::new("sys.uptime", "Uptime", Unit::Seconds, Group::System));
         }
@@ -341,10 +367,69 @@ impl Sensors {
         }
     }
 
-    /// Reads every discovered metric once. CPU usage needs two readings, so
-    /// it is absent from the very first sample.
+    fn discover_network(&mut self, sys: &Path) {
+        let Some(text) = read_str(&self.proc_.join("net/dev")) else { return };
+        let ifaces = parse_net_dev(&text);
+        if ifaces.is_empty() {
+            return;
+        }
+        for (name, _) in &ifaces {
+            if name == "lo" {
+                continue;
+            }
+            let key = name.replace('.', "_");
+            self.metrics.push(MetricInfo::new(format!("net.{key}.rx"), format!("{name} download"), Unit::BytesPerSecond, Group::Network));
+            self.metrics.push(MetricInfo::new(format!("net.{key}.tx"), format!("{name} upload"), Unit::BytesPerSecond, Group::Network));
+            if sys.join("class/net").join(name).join("device").exists() {
+                self.physical_nets.push(name.clone());
+            }
+        }
+        for (id, name, unit) in [
+            ("net.rx", "Download", Unit::BytesPerSecond),
+            ("net.tx", "Upload", Unit::BytesPerSecond),
+            ("net.rx_session", "Downloaded this session", Unit::Bytes),
+            ("net.tx_session", "Uploaded this session", Unit::Bytes),
+        ] {
+            self.metrics.push(MetricInfo::new(id, name, unit, Group::Network));
+        }
+        self.net_start = ifaces.into_iter().collect();
+    }
+
+    fn discover_disks(&mut self, sys: &Path) {
+        if let Some(text) = read_str(&self.proc_.join("self/mountinfo")) {
+            for m in parse_mountinfo(&text) {
+                // statvfs must work now, or the mount is not offered.
+                if statvfs(&m.1).is_none() {
+                    continue;
+                }
+                let key = m.0.replace('.', "_");
+                let name = mount_name(&m.1);
+                self.metrics.push(MetricInfo::new(format!("disk.{key}.used"), format!("{name} used"), Unit::Bytes, Group::Disk));
+                self.metrics.push(MetricInfo::new(format!("disk.{key}.total"), format!("{name} size"), Unit::Bytes, Group::Disk));
+                self.metrics.push(MetricInfo::new(format!("disk.{key}.free_pct"), format!("{name} free"), Unit::Percent, Group::Disk));
+                self.mounts.push(Mount { key, path: m.1 });
+            }
+        }
+        // Whole disks for I/O speed: /sys/block minus virtual devices.
+        for d in entries(&sys.join("block")) {
+            let name = file_name(&d);
+            if ["loop", "ram", "zram", "dm-", "sr"].iter().any(|p| name.starts_with(p)) {
+                continue;
+            }
+            self.metrics.push(MetricInfo::new(format!("disk.{name}.read"), format!("{name} read"), Unit::BytesPerSecond, Group::Disk));
+            self.metrics.push(MetricInfo::new(format!("disk.{name}.write"), format!("{name} write"), Unit::BytesPerSecond, Group::Disk));
+            self.disks.push(name);
+        }
+    }
+
+    /// Reads every discovered metric once. CPU usage and all rates need two
+    /// readings, so they are absent from the very first sample.
     pub fn sample(&mut self) -> Vec<(String, f64)> {
         let mut out = Vec::with_capacity(self.metrics.len());
+        let now = Instant::now();
+        let elapsed = self.last.map(|t| now.duration_since(t).as_secs_f64()).filter(|e| *e > 0.0);
+        self.last = Some(now);
+        let rate = |cur: u64, prev: u64| elapsed.map(|e| cur.saturating_sub(prev) as f64 / e);
 
         if let Some(stat) = read_str(&self.proc_.join("stat")) {
             let total = cpu::parse_proc_stat(&stat);
@@ -419,11 +504,149 @@ impl Sensors {
             }
         }
 
+        if let Some(text) = read_str(&self.proc_.join("net/dev")) {
+            let (mut rx, mut tx, mut rx_s, mut tx_s) = (0.0, 0.0, 0.0, 0.0);
+            let mut have_rate = false;
+            for (name, (r, t)) in parse_net_dev(&text) {
+                if name == "lo" {
+                    continue;
+                }
+                let key = name.replace('.', "_");
+                let prev = self.net_prev.insert(name.clone(), (r, t));
+                let physical = self.physical_nets.contains(&name);
+                if let Some((pr, pt)) = prev
+                    && let (Some(rr), Some(tr)) = (rate(r, pr), rate(t, pt))
+                {
+                    out.push((format!("net.{key}.rx"), rr));
+                    out.push((format!("net.{key}.tx"), tr));
+                    if physical {
+                        rx += rr;
+                        tx += tr;
+                        have_rate = true;
+                    }
+                }
+                if physical {
+                    let (sr, st) = self.net_start.get(&name).copied().unwrap_or((r, t));
+                    rx_s += r.saturating_sub(sr) as f64;
+                    tx_s += t.saturating_sub(st) as f64;
+                }
+            }
+            if have_rate {
+                out.push(("net.rx".into(), rx));
+                out.push(("net.tx".into(), tx));
+            }
+            if !self.physical_nets.is_empty() {
+                out.push(("net.rx_session".into(), rx_s));
+                out.push(("net.tx_session".into(), tx_s));
+            }
+        }
+
+        for m in &self.mounts {
+            if let Some((total, used, avail)) = statvfs(&m.path) {
+                out.push((format!("disk.{}.used", m.key), used));
+                out.push((format!("disk.{}.total", m.key), total));
+                if total > 0.0 {
+                    out.push((format!("disk.{}.free_pct", m.key), avail / total * 100.0));
+                }
+            }
+        }
+        if let Some(text) = read_str(&self.proc_.join("diskstats")) {
+            for (name, (r, w)) in parse_diskstats(&text) {
+                if !self.disks.contains(&name) {
+                    continue;
+                }
+                if let Some((pr, pw)) = self.disk_prev.insert(name.clone(), (r, w))
+                    && let (Some(rr), Some(wr)) = (rate(r, pr), rate(w, pw))
+                {
+                    out.push((format!("disk.{name}.read"), rr));
+                    out.push((format!("disk.{name}.write"), wr));
+                }
+            }
+        }
+
         if let Some(up) = read_str(&self.proc_.join("uptime")).and_then(|t| t.split_whitespace().next()?.parse().ok()) {
             out.push(("sys.uptime".into(), up));
         }
         out
     }
+}
+
+/// (interface, (rx bytes, tx bytes)) from `/proc/net/dev`.
+pub fn parse_net_dev(text: &str) -> Vec<(String, (u64, u64))> {
+    text.lines()
+        .skip(2)
+        .filter_map(|l| {
+            let (name, rest) = l.split_once(':')?;
+            let f: Vec<u64> = rest.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+            Some((name.trim().to_owned(), (*f.first()?, *f.get(8)?)))
+        })
+        .collect()
+}
+
+/// (device name, mount point) for real block-device mounts, one per device
+/// (btrfs `/` and `/home` are the same device). Boot partitions and system
+/// internals are left out: they are not what people mean by "my disks".
+pub fn parse_mountinfo(text: &str) -> Vec<(String, PathBuf)> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let Some(sep) = f.iter().position(|x| *x == "-") else { continue };
+        let (Some(devno), Some(mnt), Some(source)) = (f.get(2), f.get(4), f.get(sep + 2)) else { continue };
+        // Mount points escape spaces as \040.
+        let mnt = mnt.replace("\\040", " ");
+        let skip = !source.starts_with("/dev/")
+            || mnt.starts_with("/boot")
+            || mnt.starts_with("/var/lib/")
+            || mnt.starts_with("/snap")
+            || mnt.starts_with("/sysroot");
+        if skip || !seen.insert(*devno) {
+            continue;
+        }
+        let dev = source.rsplit('/').next().unwrap_or(source).to_owned();
+        out.push((dev, PathBuf::from(mnt)));
+    }
+    out
+}
+
+/// (whole disk, (bytes read, bytes written)) from `/proc/diskstats`.
+/// Sector counts there are always in 512-byte units.
+pub fn parse_diskstats(text: &str) -> Vec<(String, (u64, u64))> {
+    text.lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            let r: u64 = f.get(5)?.parse().ok()?;
+            let w: u64 = f.get(9)?.parse().ok()?;
+            Some((f.get(2)?.to_string(), (r * 512, w * 512)))
+        })
+        .collect()
+}
+
+/// "System" for `/`, the volume label for removable media, else the path.
+fn mount_name(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    if s == "/" {
+        return "System".into();
+    }
+    if s.starts_with("/run/media/") || s.starts_with("/media/") {
+        return file_name(p);
+    }
+    s.into_owned()
+}
+
+/// (total, used, available to the user) in bytes.
+fn statvfs(path: &Path) -> Option<(f64, f64, f64)> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: `c` is a valid NUL-terminated path and `st` a valid out-pointer.
+    if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+        return None;
+    }
+    let frsize = st.f_frsize as f64;
+    let total = st.f_blocks as f64 * frsize;
+    let used = total - st.f_bfree as f64 * frsize;
+    Some((total, used, st.f_bavail as f64 * frsize))
 }
 
 /// Memory figures matching GNOME System Monitor: used = total - available.
@@ -636,6 +859,35 @@ mod tests {
         assert_eq!(value(&v, "mem.cached"), Some(2000.0 * 1024.0));
         assert_eq!(value(&v, "mem.swap_used"), Some(2000.0 * 1024.0));
         assert!(memory_values("garbage").is_empty());
+    }
+
+    #[test]
+    fn net_dev() {
+        let t = "Inter-|   Receive\n face |bytes\n    lo: 3104447 50711 0 0 0 0 0 0 3104447 50711 0 0 0 0 0 0\n  wlp4s0: 1000 5 0 0 0 0 0 0 2000 7 0 0 0 0 0 0\n";
+        assert_eq!(parse_net_dev(t), vec![("lo".into(), (3104447, 3104447)), ("wlp4s0".into(), (1000, 2000))]);
+    }
+
+    #[test]
+    fn mountinfo_dedupes_btrfs_and_skips_boot() {
+        let t = "\
+29 1 0:38 /root / rw,relatime shared:1 - btrfs /dev/nvme0n1p3 rw
+30 29 0:38 /home /home rw,relatime shared:2 - btrfs /dev/nvme0n1p3 rw
+31 29 259:2 / /boot rw - ext4 /dev/nvme0n1p2 rw
+40 29 0:22 / /tmp rw - tmpfs tmpfs rw
+50 29 8:17 / /run/media/me/My\\040Stick rw - exfat /dev/sdb1 rw
+";
+        let m = parse_mountinfo(t);
+        assert_eq!(m, vec![
+            ("nvme0n1p3".into(), PathBuf::from("/")),
+            ("sdb1".into(), PathBuf::from("/run/media/me/My Stick")),
+        ]);
+        assert_eq!(mount_name(&m[1].1), "My Stick");
+    }
+
+    #[test]
+    fn diskstats() {
+        let t = " 259       0 nvme0n1 1 2 100 4 5 6 200 8 9 10 11\n";
+        assert_eq!(parse_diskstats(t), vec![("nvme0n1".into(), (100 * 512, 200 * 512))]);
     }
 
     #[test]

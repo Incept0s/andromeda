@@ -9,6 +9,7 @@ pub enum Unit {
     Percent,
     Celsius,
     Bytes,
+    BytesPerSecond,
     Watts,
     Hertz,
     Rpm,
@@ -23,6 +24,8 @@ pub enum Group {
     Gpu,
     Memory,
     Battery,
+    Network,
+    Disk,
     Fans,
     Temps,
     System,
@@ -57,8 +60,8 @@ macro_rules! str_enum {
         }
     };
 }
-str_enum!(Unit, Percent, Celsius, Bytes, Watts, Hertz, Rpm, Seconds, Flag);
-str_enum!(Group, Cpu, Gpu, Memory, Battery, Fans, Temps, System);
+str_enum!(Unit, Percent, Celsius, Bytes, BytesPerSecond, Watts, Hertz, Rpm, Seconds, Flag);
+str_enum!(Group, Cpu, Gpu, Memory, Battery, Network, Disk, Fans, Temps, System);
 
 /// Human-readable value, e.g. `42%`, `61 °C`, `11.4 GiB`, `4.2 GHz`.
 pub fn format(value: f64, unit: Unit) -> String {
@@ -66,6 +69,7 @@ pub fn format(value: f64, unit: Unit) -> String {
         Unit::Percent => format!("{value:.0}%"),
         Unit::Celsius => format!("{value:.0} °C"),
         Unit::Bytes => format_bytes(value),
+        Unit::BytesPerSecond => format!("{}/s", format_bytes(value)),
         Unit::Watts => format!("{value:.1} W"),
         Unit::Hertz if value >= 1e9 => format!("{:.2} GHz", value / 1e9),
         Unit::Hertz => format!("{:.0} MHz", value / 1e6),
@@ -82,8 +86,10 @@ pub fn format_bytes(b: f64) -> String {
         format!("{:.1} GiB", b / (K * K * K))
     } else if b >= K * K {
         format!("{:.0} MiB", b / (K * K))
-    } else {
+    } else if b >= K {
         format!("{:.0} KiB", b / K)
+    } else {
+        format!("{b:.0} B")
     }
 }
 

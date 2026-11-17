@@ -6,6 +6,8 @@
 pub mod config;
 pub mod cpu;
 pub mod metrics;
+pub mod procs;
+#[cfg(unix)]
 pub mod sensors;
 
 /// Well-known D-Bus names. The daemon owns `DAEMON_NAME`, the Tauri UI owns

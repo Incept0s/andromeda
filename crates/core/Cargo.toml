@@ -8,5 +8,9 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 
+# statvfs for disk space. The frontend (WASM) never compiles `sensors`.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 serde_json = "1"
