@@ -58,6 +58,7 @@ pub trait Daemon {
     fn shelf_list(&self) -> zbus::Result<String>;
     fn shelf_add(&self, paths: &[&str]) -> zbus::Result<()>;
     fn shelf_remove(&self, path: &str) -> zbus::Result<()>;
+    fn panel_visible(&self, visible: bool) -> zbus::Result<()>;
     fn quit(&self) -> zbus::Result<()>;
 }
 

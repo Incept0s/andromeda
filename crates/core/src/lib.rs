@@ -11,6 +11,7 @@ pub mod procs;
 #[cfg(unix)]
 pub mod sensors;
 pub mod tools;
+pub mod topbar;
 
 /// Well-known D-Bus names. The daemon owns `DAEMON_NAME`, the Tauri UI owns
 /// `PANEL_NAME`. Both follow the app ID `io.github.incept0s.Andromeda`.

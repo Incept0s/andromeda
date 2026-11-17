@@ -27,10 +27,22 @@ struct PanelTimes {
     sticky: Mutex<bool>,
 }
 
+/// Tells the daemon whether anyone is looking, so it can slow down
+/// expensive readings while the panel is hidden.
+fn report_visible(app: &AppHandle, visible: bool) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(d) = daemon(&app).await {
+            let _ = d.panel_visible(visible).await;
+        }
+    });
+}
+
 pub fn hide_panel(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.hide();
     }
+    report_visible(app, false);
 }
 
 #[tauri::command]
@@ -53,12 +65,13 @@ fn show_panel(app: &AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
+    report_visible(app, true);
 }
 
 fn toggle_panel(app: &AppHandle) {
     let Some(w) = app.get_webview_window("main") else { return };
     if w.is_visible().unwrap_or(false) {
-        let _ = w.hide();
+        hide_panel(app);
         return;
     }
     // A click on the top-bar icon can take focus from the panel first, which
@@ -248,7 +261,7 @@ fn main() {
                 // Closing the panel hides it; only Quit exits.
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = window.hide();
+                    hide_panel(window.app_handle());
                 }
                 // Behave like a popup: clicking elsewhere hides it.
                 WindowEvent::Focused(false) => {
@@ -270,7 +283,7 @@ fn main() {
                     if let Ok(mut g) = times.blur_hidden.lock() {
                         *g = Some(Instant::now());
                     }
-                    let _ = window.hide();
+                    hide_panel(window.app_handle());
                 }
                 _ => {}
             }

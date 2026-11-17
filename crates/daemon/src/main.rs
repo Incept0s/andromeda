@@ -29,7 +29,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use andromeda_core::config::Config;
+use andromeda_core::config::{self, Config};
+use andromeda_core::topbar;
 use andromeda_core::dbus;
 use andromeda_core::info::MixerState;
 use andromeda_core::metrics::MetricInfo;
@@ -61,6 +62,11 @@ struct Daemon {
     shelf: clipboard::Shelf,
     jobs: Arc<jobs::Ctx>,
     next_job: u32,
+    /// Text shown by the Shell extension next to its icon.
+    topbar: String,
+    /// The UI reports this so expensive readings (NVML) can slow down
+    /// while nobody looks.
+    panel_visible: bool,
     quit: Arc<Notify>,
 }
 
@@ -145,6 +151,18 @@ impl Daemon {
     /// Recent values per metric, oldest first.
     fn history(&self) -> HashMap<String, Vec<f64>> {
         self.history.iter().map(|(k, v)| (k.clone(), v.iter().copied().collect())).collect()
+    }
+
+    /// Top-bar text, e.g. "CPU 42°  RAM 61%  12W"; empty when the feature
+    /// is off. Changes at most once per second.
+    #[zbus(property)]
+    fn top_bar(&self) -> String {
+        self.topbar.clone()
+    }
+
+    /// Called by the UI when the panel is shown or hidden.
+    fn panel_visible(&mut self, visible: bool) {
+        self.panel_visible = visible;
     }
 
     /// Settings as JSON (see `andromeda_core::config::Config`).
@@ -404,6 +422,8 @@ async fn main() -> zbus::Result<()> {
             cleaner: Default::default(),
         }),
         next_job: 0,
+        topbar: String::new(),
+        panel_visible: false,
         quit: quit.clone(),
     };
     session.object_server().at(dbus::DAEMON_PATH, daemon).await?;
@@ -429,15 +449,31 @@ async fn main() -> zbus::Result<()> {
     };
 
     let mut alerts = alerts::Alerts::default();
+    let mut ticks: u64 = 0;
+    let mut last_nvidia: Vec<(String, f64)> = Vec::new();
     let sampler = async {
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         // After a suspend, don't fire a burst of missed ticks.
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
+            ticks += 1;
             let mut sample = sensors.sample();
             if let Some(n) = &nvidia {
-                sample.extend(n.sample());
+                // NVML calls are the costliest reading. Every second only
+                // when someone looks at a GPU number (panel open, top bar,
+                // an enabled GPU alert); otherwise every 10 s.
+                let fast = {
+                    let d = iface.get().await;
+                    let topbar = config::topbar_or_default(&d.config, &d.metrics);
+                    d.panel_visible
+                        || (d.config.features.topbar && topbar.iter().any(|id| id.starts_with("gpu.nvidia")))
+                        || d.config.alerts.rules.iter().any(|r| r.enabled && r.metric.starts_with("gpu."))
+                };
+                if fast || ticks % 10 == 1 {
+                    last_nvidia = n.sample();
+                }
+                sample.extend(last_nvidia.iter().cloned());
             }
             let mut d = iface.get_mut().await;
             for (id, v) in &sample {
@@ -450,6 +486,16 @@ async fn main() -> zbus::Result<()> {
             d.values = sample.into_iter().collect();
             // Ignore send errors: no listeners is not a failure.
             let _ = d.values_changed(iface.signal_emitter()).await;
+
+            let bar = if d.config.features.topbar {
+                topbar::text(&config::topbar_or_default(&d.config, &d.metrics), &d.metrics, &d.values)
+            } else {
+                String::new()
+            };
+            if bar != d.topbar {
+                d.topbar = bar;
+                let _ = d.top_bar_changed(iface.signal_emitter()).await;
+            }
 
             if d.awake_tick().await {
                 let _ = d.awake_until_changed(iface.signal_emitter()).await;

@@ -33,10 +33,21 @@ const SECRET_HINT = 'x-kde-passwordManagerHint';
 export default class AndromedaExtension extends Extension {
     enable() {
         this._button = new PanelMenu.Button(0.0, this.metadata.name, true);
-        this._button.add_child(new St.Icon({
+        const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
+        box.add_child(new St.Icon({
             gicon: Gio.icon_new_for_string(`${this.path}/icons/andromeda-symbolic.svg`),
             style_class: 'system-status-icon',
         }));
+        // Plain numbers formatted by the daemon (e.g. "CPU 42°  RAM 61%").
+        // The daemon publishes at most one change per second; this only
+        // sets the text. Hidden while empty.
+        this._label = new St.Label({
+            style_class: 'andromeda-label',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        box.add_child(this._label);
+        this._button.add_child(box);
         this._button.connect('button-press-event', () => {
             this._toggle();
             return Clutter.EVENT_STOP;
@@ -54,6 +65,17 @@ export default class AndromedaExtension extends Extension {
         this._setClipboardId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, DAEMON_IFACE,
             'SetClipboard', DAEMON_PATH, null, Gio.DBusSignalFlags.NONE,
             (_c, _s, _p, _i, _n, params) => this._setClipboard(...params.deep_unpack()));
+
+        this._propsId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, 'org.freedesktop.DBus.Properties',
+            'PropertiesChanged', DAEMON_PATH, DAEMON_IFACE, Gio.DBusSignalFlags.NONE,
+            (_c, _s, _p, _i, _n, params) => {
+                const changed = params.deep_unpack()[1];
+                if ('TopBar' in changed)
+                    this._setText(changed.TopBar.deep_unpack());
+            });
+        // Fetch the current text when the daemon appears; clear it when it goes.
+        this._watchId = Gio.bus_watch_name(Gio.BusType.SESSION, DAEMON_NAME, Gio.BusNameWatcherFlags.NONE,
+            () => this._fetchText(), () => this._setText(''));
     }
 
     disable() {
@@ -62,6 +84,9 @@ export default class AndromedaExtension extends Extension {
         this._selection.disconnect(this._ownerChangedId);
         this._selection = null;
         Gio.DBus.session.signal_unsubscribe(this._setClipboardId);
+        Gio.DBus.session.signal_unsubscribe(this._propsId);
+        Gio.bus_unwatch_name(this._watchId);
+        this._label = null;
         this._button.destroy();
         this._button = null;
     }
@@ -74,6 +99,25 @@ export default class AndromedaExtension extends Extension {
                     conn.call_finish(res);
                 } catch (e) {
                     console.warn(`Andromeda: Toggle failed: ${e.message}`);
+                }
+            });
+    }
+
+    _setText(text) {
+        if (!this._label)
+            return;
+        this._label.text = text;
+        this._label.visible = text.length > 0;
+    }
+
+    _fetchText() {
+        Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, 'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', [DAEMON_IFACE, 'TopBar']), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null,
+            (conn, res) => {
+                try {
+                    this._setText(conn.call_finish(res).deep_unpack()[0].deep_unpack());
+                } catch {
+                    this._setText('');
                 }
             });
     }
