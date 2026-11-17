@@ -76,12 +76,12 @@ pub async fn list(sys: &zbus::Connection) -> zbus::Result<Vec<Drive>> {
                 drive.read_bytes = a("total_data_read");
                 drive.written_bytes = a("total_data_written");
             }
-        } else if let Some(ata) = ifaces.get(&format!("{UD}.Drive.Ata")) {
-            if get::<bool>(ata, "SmartEnabled").unwrap_or(false) {
-                drive.temp_c = get::<f64>(ata, "SmartTemperature").filter(|t| *t > 0.0).map(|t| t - 273.15);
-                drive.power_on_hours = get::<u64>(ata, "SmartPowerOnSeconds").map(|s| s as f64 / 3600.0);
-                drive.failing = get(ata, "SmartFailing").unwrap_or(false);
-            }
+        } else if let Some(ata) = ifaces.get(&format!("{UD}.Drive.Ata"))
+            && get::<bool>(ata, "SmartEnabled").unwrap_or(false)
+        {
+            drive.temp_c = get::<f64>(ata, "SmartTemperature").filter(|t| *t > 0.0).map(|t| t - 273.15);
+            drive.power_on_hours = get::<u64>(ata, "SmartPowerOnSeconds").map(|s| s as f64 / 3600.0);
+            drive.failing = get(ata, "SmartFailing").unwrap_or(false);
         }
         drives.push(drive);
     }
