@@ -34,7 +34,10 @@ fn accessories() -> Vec<(String, String)> {
     data().metrics.with(|ms| {
         ms.iter()
             .filter(|m| m.group == Group::Battery && m.id.ends_with(".charge"))
-            .filter(|m| !ms.iter().any(|x| x.id == m.id.replace(".charge", ".health")))
+            .filter(|m| {
+                !ms.iter()
+                    .any(|x| x.id == m.id.replace(".charge", ".health"))
+            })
             .map(|m| (m.id.clone(), m.name.clone()))
             .collect()
     })
@@ -45,7 +48,8 @@ pub fn EnergyTab() -> impl IntoView {
     let apps = RwSignal::new(Vec::<AppUsage>::new());
     poll(POLL_FAST, move || {
         tauri::spawn(async move {
-            if let Ok(v) = tauri::invoke::<_, Vec<AppUsage>>("top_apps", &Limit { limit: 8 }).await {
+            if let Ok(v) = tauri::invoke::<_, Vec<AppUsage>>("top_apps", &Limit { limit: 8 }).await
+            {
                 apps.set(v);
             }
         });
@@ -64,7 +68,12 @@ pub fn EnergyTab() -> impl IntoView {
     };
     let battery = system_battery();
     // Apps under half a percent of the CPU are not worth a row.
-    let busy = move || apps.get().into_iter().filter(|a| a.cpu >= 0.5).collect::<Vec<_>>();
+    let busy = move || {
+        apps.get()
+            .into_iter()
+            .filter(|a| a.cpu >= 0.5)
+            .collect::<Vec<_>>()
+    };
 
     view! {
         {battery.map(|b| {

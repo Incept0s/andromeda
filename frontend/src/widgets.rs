@@ -29,10 +29,16 @@ pub fn poll(every: Duration, f: impl Fn() + 'static) {
 /// SVG sparkline of a metric's history. `max` fixes the scale (100 for
 /// percentages); otherwise the graph scales to its own peak.
 #[component]
-pub fn Spark(id: String, #[prop(optional)] max: Option<f64>, #[prop(default = "accent")] color: &'static str) -> impl IntoView {
+pub fn Spark(
+    id: String,
+    #[prop(optional)] max: Option<f64>,
+    #[prop(default = "accent")] color: &'static str,
+) -> impl IntoView {
     let points = move || {
         data().history.with(|h| {
-            let Some(q) = h.get(&id) else { return String::new() };
+            let Some(q) = h.get(&id) else {
+                return String::new();
+            };
             let top = max.unwrap_or_else(|| q.iter().copied().fold(1e-9, f64::max));
             let offset = HISTORY.saturating_sub(q.len());
             q.iter()
@@ -55,7 +61,10 @@ pub fn Spark(id: String, #[prop(optional)] max: Option<f64>, #[prop(default = "a
 
 /// Horizontal bar for a 0..100 value given as a closure.
 #[component]
-pub fn Meter(#[prop(into)] pct: Signal<f64>, #[prop(default = "accent")] color: &'static str) -> impl IntoView {
+pub fn Meter(
+    #[prop(into)] pct: Signal<f64>,
+    #[prop(default = "accent")] color: &'static str,
+) -> impl IntoView {
     let width = move || format!("width:{:.1}%", pct.get().clamp(0.0, 100.0));
     view! { <div class="bar"><div class=format!("fill {color}") style=width></div></div> }
 }

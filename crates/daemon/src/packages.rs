@@ -25,12 +25,22 @@ const INFO_INSTALLED: u32 = 1;
 /// Runs one PackageKit transaction: creates it, subscribes to its
 /// signals, calls `method(args)`, collects `Package` signals until
 /// `Finished`. Errors carry PackageKit's own message.
-async fn transaction<B>(sys: &zbus::Connection, method: &str, args: &B) -> Result<Vec<(u32, String, String)>, String>
+async fn transaction<B>(
+    sys: &zbus::Connection,
+    method: &str,
+    args: &B,
+) -> Result<Vec<(u32, String, String)>, String>
 where
     B: serde::Serialize + zbus::zvariant::DynamicType,
 {
     let reply = sys
-        .call_method(Some(PK), "/org/freedesktop/PackageKit", Some(PK), "CreateTransaction", &())
+        .call_method(
+            Some(PK),
+            "/org/freedesktop/PackageKit",
+            Some(PK),
+            "CreateTransaction",
+            &(),
+        )
         .await
         .map_err(|e| format!("PackageKit is not available: {e}"))?;
     let path: OwnedObjectPath = reply.body().deserialize().map_err(|e| e.to_string())?;
@@ -40,8 +50,12 @@ where
         .path(path.as_str())
         .build()
         .map_err(|e| e.to_string())?;
-    let mut stream = MessageStream::for_match_rule(rule, sys, std::num::NonZeroUsize::new(256)).await.map_err(|e| e.to_string())?;
-    sys.call_method(Some(PK), path.as_str(), Some(TX), method, args).await.map_err(|e| e.to_string())?;
+    let mut stream = MessageStream::for_match_rule(rule, sys, std::num::NonZeroUsize::new(256))
+        .await
+        .map_err(|e| e.to_string())?;
+    sys.call_method(Some(PK), path.as_str(), Some(TX), method, args)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut packages = Vec::new();
     let mut error = None;
@@ -104,28 +118,48 @@ pub async fn search_rpm(sys: &zbus::Connection, query: &str) -> Result<Vec<Packa
 }
 
 pub async fn install_rpm(sys: &zbus::Connection, id: &str) -> Result<(), String> {
-    transaction(sys, "InstallPackages", &(ONLY_TRUSTED, vec![id])).await.map(|_| ())
+    transaction(sys, "InstallPackages", &(ONLY_TRUSTED, vec![id]))
+        .await
+        .map(|_| ())
 }
 
 pub async fn remove_rpm(sys: &zbus::Connection, id: &str) -> Result<(), String> {
     // allow_deps = true (remove what depends on it), autoremove = true.
-    transaction(sys, "RemovePackages", &(ONLY_TRUSTED, vec![id], true, true)).await.map(|_| ())
+    transaction(sys, "RemovePackages", &(ONLY_TRUSTED, vec![id], true, true))
+        .await
+        .map(|_| ())
 }
 
 pub async fn rpm_updates(sys: &zbus::Connection) -> Result<Vec<Package>, String> {
     let found = transaction(sys, "GetUpdates", &(0u64,)).await?;
-    Ok(found.into_iter().map(|(_, id, s)| Package { installed: true, ..rpm(0, id, s) }).collect())
+    Ok(found
+        .into_iter()
+        .map(|(_, id, s)| Package {
+            installed: true,
+            ..rpm(0, id, s)
+        })
+        .collect())
 }
 
 pub async fn update_rpms(sys: &zbus::Connection, ids: &[String]) -> Result<(), String> {
-    transaction(sys, "UpdatePackages", &(ONLY_TRUSTED, ids)).await.map(|_| ())
+    transaction(sys, "UpdatePackages", &(ONLY_TRUSTED, ids))
+        .await
+        .map(|_| ())
 }
 
 /// Runs flatpak with tab-separated columns and splits the rows.
 async fn flatpak(args: &[&str]) -> Result<Vec<Vec<String>>, String> {
-    let out = Command::new("flatpak").args(args).output().await.map_err(|_| "Flatpak is not installed.".to_owned())?;
+    let out = Command::new("flatpak")
+        .args(args)
+        .output()
+        .await
+        .map_err(|_| "Flatpak is not installed.".to_owned())?;
     if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or("flatpak failed").to_owned());
+        return Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .last()
+            .unwrap_or("flatpak failed")
+            .to_owned());
     }
     Ok(String::from_utf8_lossy(&out.stdout)
         .lines()
@@ -135,12 +169,22 @@ async fn flatpak(args: &[&str]) -> Result<Vec<Vec<String>>, String> {
 }
 
 pub async fn flatpak_installed() -> Vec<String> {
-    flatpak(&["list", "--app", "--columns=application"]).await.unwrap_or_default().into_iter().filter_map(|r| r.into_iter().next()).collect()
+    flatpak(&["list", "--app", "--columns=application"])
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|r| r.into_iter().next())
+        .collect()
 }
 
 pub async fn search_flatpak(query: &str) -> Result<Vec<Package>, String> {
     let installed = flatpak_installed().await;
-    let rows = flatpak(&["search", "--columns=application,name,description,version", query]).await?;
+    let rows = flatpak(&[
+        "search",
+        "--columns=application,name,description,version",
+        query,
+    ])
+    .await?;
     Ok(rows
         .into_iter()
         .filter(|r| r.len() >= 2 && r[0].contains('.'))
@@ -157,7 +201,13 @@ pub async fn search_flatpak(query: &str) -> Result<Vec<Package>, String> {
 }
 
 pub async fn flatpak_updates() -> Result<Vec<Package>, String> {
-    let rows = flatpak(&["remote-ls", "--updates", "--app", "--columns=application,name,version"]).await?;
+    let rows = flatpak(&[
+        "remote-ls",
+        "--updates",
+        "--app",
+        "--columns=application,name,version",
+    ])
+    .await?;
     Ok(rows
         .into_iter()
         .filter(|r| !r.is_empty())
@@ -195,7 +245,10 @@ mod tests {
     #[test]
     fn parses_package_ids() {
         let p = rpm(2, "htop;3.3.0-1.fc44;x86_64;fedora".into(), "Viewer".into());
-        assert_eq!((p.name.as_str(), p.version.as_str(), p.installed), ("htop", "3.3.0-1.fc44", false));
+        assert_eq!(
+            (p.name.as_str(), p.version.as_str(), p.installed),
+            ("htop", "3.3.0-1.fc44", false)
+        );
         assert!(rpm(1, "bash;5;x86_64;installed".into(), String::new()).installed);
         let v = dedupe(vec![
             rpm(2, "a;2;x86_64;fedora".into(), String::new()),

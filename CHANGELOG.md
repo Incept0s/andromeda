@@ -6,6 +6,10 @@ All notable changes to Andromeda are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-18
+
+First public release.
+
 ### Added
 
 - Background service `andromedad`: metric registry from `/proc`, `/sys` and

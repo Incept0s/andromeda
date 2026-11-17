@@ -75,7 +75,10 @@ mod tests {
     fn parses_aggregate_line() {
         let t = parse_proc_stat(SAMPLE).unwrap();
         assert_eq!(t.idle, 16578297 + 6999);
-        assert_eq!(t.total, 264069 + 2003 + 81630 + 16578297 + 6999 + 24760 + 11461);
+        assert_eq!(
+            t.total,
+            264069 + 2003 + 81630 + 16578297 + 6999 + 24760 + 11461
+        );
     }
 
     #[test]
@@ -94,8 +97,14 @@ mod tests {
 
     #[test]
     fn computes_usage() {
-        let a = CpuTimes { idle: 100, total: 200 };
-        let b = CpuTimes { idle: 150, total: 300 };
+        let a = CpuTimes {
+            idle: 100,
+            total: 200,
+        };
+        let b = CpuTimes {
+            idle: 150,
+            total: 300,
+        };
         assert_eq!(usage_percent(a, b), Some(50.0));
         assert_eq!(usage_percent(a, a), None);
         assert_eq!(usage_percent(b, a), None);

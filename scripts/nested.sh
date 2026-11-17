@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Runs a nested GNOME Shell (in a window) with only the Andromeda extension
 # enabled. Safe for your real session: it uses its own D-Bus and its own
 # settings database (a temporary XDG_CONFIG_HOME), so enabling or crashing

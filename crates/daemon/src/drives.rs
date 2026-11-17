@@ -14,12 +14,24 @@ type Props = HashMap<String, OwnedValue>;
 type Objects = HashMap<OwnedObjectPath, HashMap<String, Props>>;
 
 async fn objects(sys: &zbus::Connection) -> zbus::Result<Objects> {
-    let om = ObjectManagerProxy::builder(sys).destination(UD).path("/org/freedesktop/UDisks2").build().await?;
+    let om = ObjectManagerProxy::builder(sys)
+        .destination(UD)
+        .path("/org/freedesktop/UDisks2")
+        .build()
+        .await?;
     Ok(om
         .get_managed_objects()
         .await?
         .into_iter()
-        .map(|(p, ifaces)| (p, ifaces.into_iter().map(|(k, v)| (k.to_string(), v)).collect()))
+        .map(|(p, ifaces)| {
+            (
+                p,
+                ifaces
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect(),
+            )
+        })
         .collect())
 }
 
@@ -42,31 +54,46 @@ pub async fn list(sys: &zbus::Connection) -> zbus::Result<Vec<Drive>> {
     let objs = objects(sys).await?;
     let mut drives = Vec::new();
     for (path, ifaces) in &objs {
-        let Some(d) = ifaces.get(&format!("{UD}.Drive")) else { continue };
+        let Some(d) = ifaces.get(&format!("{UD}.Drive")) else {
+            continue;
+        };
         let mut drive = Drive {
             path: path.to_string(),
-            model: get::<String>(d, "Model").filter(|m| !m.is_empty()).unwrap_or_else(|| "Drive".into()),
+            model: get::<String>(d, "Model")
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| "Drive".into()),
             size: get::<u64>(d, "Size").unwrap_or(0) as f64,
             removable: get(d, "Removable").unwrap_or(false),
-            can_eject: get::<bool>(d, "Ejectable").unwrap_or(false) || get::<bool>(d, "CanPowerOff").unwrap_or(false),
+            can_eject: get::<bool>(d, "Ejectable").unwrap_or(false)
+                || get::<bool>(d, "CanPowerOff").unwrap_or(false),
             bus: get(d, "ConnectionBus").unwrap_or_default(),
             ..Default::default()
         };
         // Mounts of this drive's filesystems.
         for b in objs.values() {
-            if let (Some(block), Some(fs)) = (b.get(&format!("{UD}.Block")), b.get(&format!("{UD}.Filesystem")))
-                && get::<OwnedObjectPath>(block, "Drive").is_some_and(|p| p == *path)
+            if let (Some(block), Some(fs)) = (
+                b.get(&format!("{UD}.Block")),
+                b.get(&format!("{UD}.Filesystem")),
+            ) && get::<OwnedObjectPath>(block, "Drive").is_some_and(|p| p == *path)
             {
                 drive.mounts.extend(mount_points(fs));
             }
         }
         if let Some(n) = ifaces.get(&format!("{UD}.NVMe.Controller")) {
             // Kelvin; 0 means unknown.
-            drive.temp_c = get::<u16>(n, "SmartTemperature").filter(|t| *t > 0).map(|t| f64::from(t) - 273.15);
+            drive.temp_c = get::<u16>(n, "SmartTemperature")
+                .filter(|t| *t > 0)
+                .map(|t| f64::from(t) - 273.15);
             drive.power_on_hours = get::<u64>(n, "SmartPowerOnHours").map(|h| h as f64);
-            drive.failing = get::<Vec<String>>(n, "SmartCriticalWarning").is_some_and(|w| !w.is_empty());
+            drive.failing =
+                get::<Vec<String>>(n, "SmartCriticalWarning").is_some_and(|w| !w.is_empty());
             if let Ok(attrs) = nvme_attributes(sys, path).await {
-                let a = |k: &str| attrs.get(k).and_then(|v| v.try_clone().ok()).and_then(as_f64);
+                let a = |k: &str| {
+                    attrs
+                        .get(k)
+                        .and_then(|v| v.try_clone().ok())
+                        .and_then(as_f64)
+                };
                 drive.health = a("percent_used").map(|u| (100.0 - u).max(0.0));
                 drive.power_cycles = a("power_cycles");
                 drive.unsafe_shutdowns = a("unsafe_shutdowns");
@@ -79,8 +106,11 @@ pub async fn list(sys: &zbus::Connection) -> zbus::Result<Vec<Drive>> {
         } else if let Some(ata) = ifaces.get(&format!("{UD}.Drive.Ata"))
             && get::<bool>(ata, "SmartEnabled").unwrap_or(false)
         {
-            drive.temp_c = get::<f64>(ata, "SmartTemperature").filter(|t| *t > 0.0).map(|t| t - 273.15);
-            drive.power_on_hours = get::<u64>(ata, "SmartPowerOnSeconds").map(|s| s as f64 / 3600.0);
+            drive.temp_c = get::<f64>(ata, "SmartTemperature")
+                .filter(|t| *t > 0.0)
+                .map(|t| t - 273.15);
+            drive.power_on_hours =
+                get::<u64>(ata, "SmartPowerOnSeconds").map(|s| s as f64 / 3600.0);
             drive.failing = get(ata, "SmartFailing").unwrap_or(false);
         }
         drives.push(drive);
@@ -100,7 +130,10 @@ fn as_f64(v: OwnedValue) -> Option<f64> {
     u32::try_from(v).ok().map(f64::from)
 }
 
-async fn nvme_attributes(sys: &zbus::Connection, drive: &OwnedObjectPath) -> zbus::Result<HashMap<String, OwnedValue>> {
+async fn nvme_attributes(
+    sys: &zbus::Connection,
+    drive: &OwnedObjectPath,
+) -> zbus::Result<HashMap<String, OwnedValue>> {
     let reply = sys
         .call_method(
             Some(UD),
@@ -119,17 +152,27 @@ pub async fn eject(sys: &zbus::Connection, drive: &str) -> Result<(), String> {
     let objs = objects(sys).await.map_err(|e| e.to_string())?;
     let opts = (HashMap::<String, OwnedValue>::new(),);
     for (path, ifaces) in &objs {
-        if let (Some(block), Some(fs)) = (ifaces.get(&format!("{UD}.Block")), ifaces.get(&format!("{UD}.Filesystem")))
-            && get::<OwnedObjectPath>(block, "Drive").is_some_and(|p| p.as_str() == drive)
+        if let (Some(block), Some(fs)) = (
+            ifaces.get(&format!("{UD}.Block")),
+            ifaces.get(&format!("{UD}.Filesystem")),
+        ) && get::<OwnedObjectPath>(block, "Drive").is_some_and(|p| p.as_str() == drive)
             && !mount_points(fs).is_empty()
         {
-            sys.call_method(Some(UD), path.as_str(), Some(format!("{UD}.Filesystem").as_str()), "Unmount", &opts)
-                .await
-                .map_err(|e| format!("Could not unmount: {e}"))?;
+            sys.call_method(
+                Some(UD),
+                path.as_str(),
+                Some(format!("{UD}.Filesystem").as_str()),
+                "Unmount",
+                &opts,
+            )
+            .await
+            .map_err(|e| format!("Could not unmount: {e}"))?;
         }
     }
     let iface = format!("{UD}.Drive");
-    let power_off = sys.call_method(Some(UD), drive, Some(iface.as_str()), "PowerOff", &opts).await;
+    let power_off = sys
+        .call_method(Some(UD), drive, Some(iface.as_str()), "PowerOff", &opts)
+        .await;
     if power_off.is_err() {
         sys.call_method(Some(UD), drive, Some(iface.as_str()), "Eject", &opts)
             .await

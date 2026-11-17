@@ -24,7 +24,16 @@ enum Page {
 }
 
 impl Page {
-    const ALL: [Page; 8] = [Page::General, Page::Features, Page::TopBar, Page::Alerts, Page::Mixer, Page::Awake, Page::Check, Page::About];
+    const ALL: [Page; 8] = [
+        Page::General,
+        Page::Features,
+        Page::TopBar,
+        Page::Alerts,
+        Page::Mixer,
+        Page::Awake,
+        Page::Check,
+        Page::About,
+    ];
     fn title(self) -> &'static str {
         match self {
             Page::General => "General",
@@ -138,7 +147,13 @@ fn Features() -> impl IntoView {
 #[component]
 fn TopBar() -> impl IntoView {
     let d = data();
-    let chosen = move || d.config.with(|c| c.as_ref().map(|c| config::topbar_or_default(c, &d.metrics.get())).unwrap_or_default());
+    let chosen = move || {
+        d.config.with(|c| {
+            c.as_ref()
+                .map(|c| config::topbar_or_default(c, &d.metrics.get()))
+                .unwrap_or_default()
+        })
+    };
     let set = move |v: Vec<String>| d.edit_config(|c| c.topbar = Some(v));
     let name = move |id: &str| d.info(id).map_or(id.to_owned(), |m| m.name);
     let preview = move || {
@@ -221,7 +236,12 @@ fn TopBar() -> impl IntoView {
 /// Human description of a rule's metric pattern.
 fn describe(pattern: &str) -> String {
     let d = data();
-    let matches: Vec<String> = d.metrics.with(|ms| ms.iter().filter(|m| config::pattern_matches(pattern, &m.id)).map(|m| m.name.clone()).collect());
+    let matches: Vec<String> = d.metrics.with(|ms| {
+        ms.iter()
+            .filter(|m| config::pattern_matches(pattern, &m.id))
+            .map(|m| m.name.clone())
+            .collect()
+    });
     match matches.len() {
         0 => format!("{pattern} (not on this computer)"),
         1 => matches[0].clone(),
@@ -232,10 +252,28 @@ fn describe(pattern: &str) -> String {
 #[component]
 fn Alerts() -> impl IntoView {
     let d = data();
-    let rules = move || d.config.with(|c| c.as_ref().map(|c| c.alerts.rules.clone()).unwrap_or_default());
-    let edit = move |i: usize, f: Box<dyn FnOnce(&mut AlertRule)>| d.edit_config(move |c| if let Some(r) = c.alerts.rules.get_mut(i) { f(r) });
+    let rules = move || {
+        d.config.with(|c| {
+            c.as_ref()
+                .map(|c| c.alerts.rules.clone())
+                .unwrap_or_default()
+        })
+    };
+    let edit = move |i: usize, f: Box<dyn FnOnce(&mut AlertRule)>| {
+        d.edit_config(move |c| {
+            if let Some(r) = c.alerts.rules.get_mut(i) {
+                f(r)
+            }
+        })
+    };
     let new_metric = RwSignal::new(String::new());
-    let unit_of = move |pattern: &str| d.metrics.with(|ms| ms.iter().find(|m| config::pattern_matches(pattern, &m.id)).map(|m| m.unit));
+    let unit_of = move |pattern: &str| {
+        d.metrics.with(|ms| {
+            ms.iter()
+                .find(|m| config::pattern_matches(pattern, &m.id))
+                .map(|m| m.unit)
+        })
+    };
     view! {
         <h2>"Alerts"</h2>
         <p class="muted">"A notification when a reading stays past its limit for 12 seconds."</p>
@@ -282,8 +320,17 @@ fn Alerts() -> impl IntoView {
 #[component]
 fn Mixer() -> impl IntoView {
     let d = data();
-    let max = move || d.config.with(|c| c.as_ref().map_or(153, |c| c.mixer.max_volume));
-    let hidden = move || d.config.with(|c| c.as_ref().map(|c| c.mixer.hidden.clone()).unwrap_or_default());
+    let max = move || {
+        d.config
+            .with(|c| c.as_ref().map_or(153, |c| c.mixer.max_volume))
+    };
+    let hidden = move || {
+        d.config.with(|c| {
+            c.as_ref()
+                .map(|c| c.mixer.hidden.clone())
+                .unwrap_or_default()
+        })
+    };
     view! {
         <h2>"Volume mixer"</h2>
         <div class="setting">
@@ -326,7 +373,8 @@ fn Mixer() -> impl IntoView {
 #[component]
 fn Awake() -> impl IntoView {
     let d = data();
-    let get = move |f: fn(&Config) -> String| d.config.with(|c| c.as_ref().map(f).unwrap_or_default());
+    let get =
+        move |f: fn(&Config) -> String| d.config.with(|c| c.as_ref().map(f).unwrap_or_default());
     view! {
         <h2>"Keep awake"</h2>
         <div class="setting">
@@ -399,7 +447,9 @@ pub fn Settings() -> impl IntoView {
         let q = query.get().to_lowercase();
         Page::ALL
             .into_iter()
-            .filter(|p| q.is_empty() || p.title().to_lowercase().contains(&q) || p.keywords().contains(&q))
+            .filter(|p| {
+                q.is_empty() || p.title().to_lowercase().contains(&q) || p.keywords().contains(&q)
+            })
             .collect::<Vec<_>>()
     };
     view! {

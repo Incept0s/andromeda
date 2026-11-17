@@ -71,15 +71,32 @@ fn stream_key(p: &pa::proplist::Proplist) -> (String, String, Vec<String>) {
     let app_id = get("pipewire.access.portal.app_id");
     let binary = get("application.process.binary");
     let app_name = get("application.name");
-    let key = app_id.clone().or_else(|| binary.as_ref().map(|b| b.to_lowercase())).or(app_name.clone()).unwrap_or_else(|| "unknown".into());
+    let key = app_id
+        .clone()
+        .or_else(|| binary.as_ref().map(|b| b.to_lowercase()))
+        .or(app_name.clone())
+        .unwrap_or_else(|| "unknown".into());
     // Prefer the .desktop name: streams often call themselves things like
     // "WEBRTC VoiceEngine" or "Playback".
-    let entry = app_id.as_deref().and_then(desktop_entry).or_else(|| binary.as_deref().and_then(desktop_entry));
-    let name = entry.as_ref().map(|(n, _)| n.clone()).or(app_name).or(binary.clone()).unwrap_or_else(|| key.clone());
-    let icons = [entry.and_then(|(_, i)| i), get("application.icon_name"), app_id, binary.map(|b| b.to_lowercase())]
-        .into_iter()
-        .flatten()
-        .collect();
+    let entry = app_id
+        .as_deref()
+        .and_then(desktop_entry)
+        .or_else(|| binary.as_deref().and_then(desktop_entry));
+    let name = entry
+        .as_ref()
+        .map(|(n, _)| n.clone())
+        .or(app_name)
+        .or(binary.clone())
+        .unwrap_or_else(|| key.clone());
+    let icons = [
+        entry.and_then(|(_, i)| i),
+        get("application.icon_name"),
+        app_id,
+        binary.map(|b| b.to_lowercase()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     (key, name, icons)
 }
 
@@ -87,7 +104,9 @@ fn percent(v: &ChannelVolumes) -> f64 {
     f64::from(v.avg().0) / f64::from(Volume::NORMAL.0) * 100.0
 }
 
-pub fn spawn(max_volume: impl Fn() -> f64 + Send + 'static) -> (mpsc::Sender<Cmd>, watch::Receiver<MixerState>) {
+pub fn spawn(
+    max_volume: impl Fn() -> f64 + Send + 'static,
+) -> (mpsc::Sender<Cmd>, watch::Receiver<MixerState>) {
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (state_tx, state_rx) = watch::channel(MixerState::default());
     std::thread::Builder::new()
@@ -106,10 +125,18 @@ pub fn spawn(max_volume: impl Fn() -> f64 + Send + 'static) -> (mpsc::Sender<Cmd
 
 /// One connection's lifetime. Returns when the connection fails.
 fn run(cmds: &mpsc::Receiver<Cmd>, out: &watch::Sender<MixerState>, max_volume: &dyn Fn() -> f64) {
-    let Some(mut ml) = Mainloop::new() else { return };
-    let Some(ctx) = Context::new(&ml, "Andromeda") else { return };
+    let Some(mut ml) = Mainloop::new() else {
+        return;
+    };
+    let Some(ctx) = Context::new(&ml, "Andromeda") else {
+        return;
+    };
     let ctx = Rc::new(RefCell::new(ctx));
-    if ctx.borrow_mut().connect(None, FlagSet::NOFLAGS, None).is_err() {
+    if ctx
+        .borrow_mut()
+        .connect(None, FlagSet::NOFLAGS, None)
+        .is_err()
+    {
         return;
     }
     // Wait until ready (or failed).
@@ -127,7 +154,13 @@ fn run(cmds: &mpsc::Receiver<Cmd>, out: &watch::Sender<MixerState>, max_volume: 
         let d = dirty.clone();
         let mut c = ctx.borrow_mut();
         c.set_subscribe_callback(Some(Box::new(move |_, _, _| d.set(true))));
-        c.subscribe(InterestMaskSet::SINK_INPUT | InterestMaskSet::SINK | InterestMaskSet::SOURCE | InterestMaskSet::SERVER, |_| {});
+        c.subscribe(
+            InterestMaskSet::SINK_INPUT
+                | InterestMaskSet::SINK
+                | InterestMaskSet::SOURCE
+                | InterestMaskSet::SERVER,
+            |_| {},
+        );
     }
 
     let snap = Rc::new(RefCell::new(Snapshot::default()));
@@ -136,7 +169,10 @@ fn run(cmds: &mpsc::Receiver<Cmd>, out: &watch::Sender<MixerState>, max_volume: 
 
     loop {
         // Block up to 50 ms waiting for server events, then handle commands.
-        if ml.prepare(Some(pa::time::MicroSeconds(50_000))).is_err() || ml.poll().is_err() || ml.dispatch().is_err() {
+        if ml.prepare(Some(pa::time::MicroSeconds(50_000))).is_err()
+            || ml.poll().is_err()
+            || ml.dispatch().is_err()
+        {
             return;
         }
         if !matches!(ctx.borrow().get_state(), State::Ready) {
@@ -165,7 +201,10 @@ fn request(ctx: &Rc<RefCell<Context>>, snap: &Rc<RefCell<Snapshot>>) {
     let intro = ctx.borrow().introspect();
     {
         let mut s = snap.borrow_mut();
-        *s = Snapshot { pending: 4, ..Default::default() };
+        *s = Snapshot {
+            pending: 4,
+            ..Default::default()
+        };
     }
     let s = snap.clone();
     intro.get_sink_input_info_list(move |r| match r {
@@ -212,14 +251,28 @@ fn request(ctx: &Rc<RefCell<Context>>, snap: &Rc<RefCell<Snapshot>>) {
     let s = snap.clone();
     intro.get_server_info(move |i| {
         let mut s = s.borrow_mut();
-        s.default_sink = i.default_sink_name.as_deref().unwrap_or_default().to_owned();
-        s.default_source = i.default_source_name.as_deref().unwrap_or_default().to_owned();
+        s.default_sink = i
+            .default_sink_name
+            .as_deref()
+            .unwrap_or_default()
+            .to_owned();
+        s.default_source = i
+            .default_source_name
+            .as_deref()
+            .unwrap_or_default()
+            .to_owned();
         s.pending -= 1;
     });
 }
 
 fn build(s: &Snapshot, icons: &mut Icons) -> MixerState {
-    let sink_name = |idx: u32| s.sinks.iter().find(|(i, _)| *i == idx).map(|(_, d)| d.name.clone()).unwrap_or_default();
+    let sink_name = |idx: u32| {
+        s.sinks
+            .iter()
+            .find(|(i, _)| *i == idx)
+            .map(|(_, d)| d.name.clone())
+            .unwrap_or_default()
+    };
     let mut apps: Vec<MixApp> = Vec::new();
     let mut order: HashMap<String, usize> = HashMap::new();
     for st in &s.streams {
@@ -246,7 +299,11 @@ fn build(s: &Snapshot, icons: &mut Icons) -> MixerState {
     for a in &mut apps {
         a.volume /= f64::from(a.streams.max(1));
     }
-    apps.sort_by(|a, b| b.playing.cmp(&a.playing).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    apps.sort_by(|a, b| {
+        b.playing
+            .cmp(&a.playing)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     MixerState {
         connected: true,
         apps,
@@ -258,7 +315,13 @@ fn build(s: &Snapshot, icons: &mut Icons) -> MixerState {
 }
 
 fn apply(ctx: &Rc<RefCell<Context>>, s: &Snapshot, cmd: Cmd, max: f64) {
-    let streams = |key: &str| s.streams.iter().filter(|st| st.key == key).cloned().collect::<Vec<_>>();
+    let streams = |key: &str| {
+        s.streams
+            .iter()
+            .filter(|st| st.key == key)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
     let mut intro = ctx.borrow().introspect();
     match cmd {
         Cmd::Volume(key, pct) => {

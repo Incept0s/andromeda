@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds Andromeda from source and installs it as an RPM (Fedora).
 # Installs missing build tools first. Asks for your password for dnf.
 set -euo pipefail

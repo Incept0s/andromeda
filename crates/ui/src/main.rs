@@ -76,7 +76,9 @@ fn show_panel(app: &AppHandle) {
 }
 
 fn toggle_panel(app: &AppHandle) {
-    let Some(w) = app.get_webview_window("main") else { return };
+    let Some(w) = app.get_webview_window("main") else {
+        return;
+    };
     if w.is_visible().unwrap_or(false) {
         hide_panel(app);
         return;
@@ -84,7 +86,12 @@ fn toggle_panel(app: &AppHandle) {
     // A click on the top-bar icon can take focus from the panel first, which
     // hides it via the blur handler. Without this guard, that same click
     // would re-open it immediately.
-    let recently = app.state::<PanelTimes>().blur_hidden.lock().ok().and_then(|g| *g);
+    let recently = app
+        .state::<PanelTimes>()
+        .blur_hidden
+        .lock()
+        .ok()
+        .and_then(|g| *g);
     if recently.is_some_and(|t| t.elapsed() < Duration::from_millis(300)) {
         return;
     }
@@ -124,21 +131,27 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("settings") {
         return w.set_focus().map_err(|e| e.to_string());
     }
-    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html#settings".into()))
-        .title("Andromeda Settings")
-        .inner_size(820.0, 600.0)
-        // Same glass as the panel: no GTK frame, our own title bar.
-        .decorations(false)
-        .transparent(true)
-        .resizable(false)
-        .theme(Some(tauri::Theme::Dark))
-        .build()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    WebviewWindowBuilder::new(
+        &app,
+        "settings",
+        WebviewUrl::App("index.html#settings".into()),
+    )
+    .title("Andromeda Settings")
+    .inner_size(820.0, 600.0)
+    // Same glass as the panel: no GTK frame, our own title bar.
+    .decorations(false)
+    .transparent(true)
+    .resizable(false)
+    .theme(Some(tauri::Theme::Dark))
+    .build()
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 fn panel_visible(app: &AppHandle) -> bool {
-    app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false)
+    app.get_webview_window("main")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
 }
 
 /// Registers the panel D-Bus name, then forwards daemon updates to the
@@ -154,8 +167,14 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
     app.manage(conn.clone());
 
     let d = DaemonProxy::new(&conn).await?;
-    let (mut values, mut mixer) = (d.receive_values_changed().await, d.receive_mixer_changed().await);
-    let (mut config, mut awake) = (d.receive_config_changed().await, d.receive_awake_until_changed().await);
+    let (mut values, mut mixer) = (
+        d.receive_values_changed().await,
+        d.receive_mixer_changed().await,
+    );
+    let (mut config, mut awake) = (
+        d.receive_config_changed().await,
+        d.receive_awake_until_changed().await,
+    );
     loop {
         tokio::select! {
             Some(c) = values.next() => if panel_visible(&app) && let Ok(v) = c.get().await {
@@ -191,7 +210,9 @@ async fn exit_when_idle(app: AppHandle) {
     loop {
         tokio::time::sleep(CHECK).await;
         let visible = |label| {
-            app.get_webview_window(label).and_then(|w| w.is_visible().ok()).unwrap_or(false)
+            app.get_webview_window(label)
+                .and_then(|w| w.is_visible().ok())
+                .unwrap_or(false)
         };
         if visible("main") || visible("settings") {
             hidden_checks = 0;

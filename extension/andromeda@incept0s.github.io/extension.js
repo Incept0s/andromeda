@@ -219,9 +219,6 @@ export default class AndromedaExtension extends Extension {
             win.disconnect(id);
             if (!this._button || !this._isAndromeda(win))
                 return;
-            // Phase 1 diagnostics: confirms which ids Tauri's window reports.
-            console.log(`Andromeda: window wm_class=${win.get_wm_class()} ` +
-                `app_id=${win.get_gtk_application_id()} title=${win.get_title()}`);
             if (win.get_title() === PANEL_TITLE)
                 this._place(win);
         });
@@ -238,7 +235,5 @@ export default class AndromedaExtension extends Extension {
         const y = Math.round(by + bh);
         win.move_frame(true, x, y);
         win.make_above();
-        const now = win.get_frame_rect();
-        console.log(`Andromeda: placed panel, asked ${x},${y}, now at ${now.x},${now.y} size ${now.width}x${now.height}`);
     }
 }

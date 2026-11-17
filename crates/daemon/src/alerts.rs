@@ -51,7 +51,10 @@ impl Alerts {
         let cooldown = Duration::from_secs(u64::from(cfg.cooldown_minutes) * 60);
         let mut out = Vec::new();
         for (i, rule) in cfg.rules.iter().enumerate().filter(|(_, r)| r.enabled) {
-            for m in metrics.iter().filter(|m| config::pattern_matches(&rule.metric, &m.id)) {
+            for m in metrics
+                .iter()
+                .filter(|m| config::pattern_matches(&rule.metric, &m.id))
+            {
                 let gate = self.gates.entry((i, m.id.clone())).or_default();
                 let over = values.get(&m.id).is_some_and(|v| match rule.direction {
                     Direction::Above => *v >= rule.threshold,
@@ -62,14 +65,23 @@ impl Alerts {
                     continue;
                 }
                 let since = *gate.held_since.get_or_insert(now);
-                let cooled = gate.last_sent.is_none_or(|t| now.duration_since(t) >= cooldown);
+                let cooled = gate
+                    .last_sent
+                    .is_none_or(|t| now.duration_since(t) >= cooldown);
                 if now.duration_since(since) >= SUSTAINED && cooled {
                     gate.last_sent = Some(now);
                     let v = values[&m.id];
-                    let word = if rule.direction == Direction::Above { "above" } else { "below" };
+                    let word = if rule.direction == Direction::Above {
+                        "above"
+                    } else {
+                        "below"
+                    };
                     out.push(Notice {
                         title: format!("{} is {}", m.name, format(v, m.unit)),
-                        body: format!("It has been {word} {} for a while.", format(rule.threshold, m.unit)),
+                        body: format!(
+                            "It has been {word} {} for a while.",
+                            format(rule.threshold, m.unit)
+                        ),
                     });
                 }
             }
@@ -86,12 +98,27 @@ mod tests {
 
     fn setup() -> (config::Alerts, Vec<MetricInfo>) {
         let cfg = config::Alerts {
-            rules: vec![AlertRule { metric: "gpu.*.temp".into(), direction: Direction::Above, threshold: 90.0, enabled: true }],
+            rules: vec![AlertRule {
+                metric: "gpu.*.temp".into(),
+                direction: Direction::Above,
+                threshold: 90.0,
+                enabled: true,
+            }],
             cooldown_minutes: 15,
         };
         let metrics = vec![
-            MetricInfo::new("gpu.card1.temp", "Radeon temperature", Unit::Celsius, Group::Gpu),
-            MetricInfo::new("gpu.nvidia0.temp", "RTX temperature", Unit::Celsius, Group::Gpu),
+            MetricInfo::new(
+                "gpu.card1.temp",
+                "Radeon temperature",
+                Unit::Celsius,
+                Group::Gpu,
+            ),
+            MetricInfo::new(
+                "gpu.nvidia0.temp",
+                "RTX temperature",
+                Unit::Celsius,
+                Group::Gpu,
+            ),
         ];
         (cfg, metrics)
     }
@@ -106,13 +133,28 @@ mod tests {
         let mut a = Alerts::default();
         let t0 = Instant::now();
         assert!(a.check(&cfg, &m, &vals(95.0, 50.0), t0).is_empty());
-        assert!(a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(6)).is_empty());
+        assert!(
+            a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(6))
+                .is_empty()
+        );
         let fired = a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(12));
         assert_eq!(fired.len(), 1);
         assert!(fired[0].title.starts_with("Radeon temperature is 95"));
         // Still hot, but inside the cooldown.
-        assert!(a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(60)).is_empty());
-        assert_eq!(a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(12 + 15 * 60)).len(), 1);
+        assert!(
+            a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(60))
+                .is_empty()
+        );
+        assert_eq!(
+            a.check(
+                &cfg,
+                &m,
+                &vals(95.0, 50.0),
+                t0 + Duration::from_secs(12 + 15 * 60)
+            )
+            .len(),
+            1
+        );
     }
 
     #[test]
@@ -122,7 +164,10 @@ mod tests {
         let t0 = Instant::now();
         a.check(&cfg, &m, &vals(95.0, 50.0), t0);
         a.check(&cfg, &m, &vals(80.0, 50.0), t0 + Duration::from_secs(8));
-        assert!(a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(13)).is_empty());
+        assert!(
+            a.check(&cfg, &m, &vals(95.0, 50.0), t0 + Duration::from_secs(13))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -131,9 +176,15 @@ mod tests {
         let mut a = Alerts::default();
         let t0 = Instant::now();
         a.check(&cfg, &m, &HashMap::new(), t0);
-        assert!(a.check(&cfg, &m, &HashMap::new(), t0 + Duration::from_secs(20)).is_empty());
+        assert!(
+            a.check(&cfg, &m, &HashMap::new(), t0 + Duration::from_secs(20))
+                .is_empty()
+        );
         cfg.rules[0].enabled = false;
         a.check(&cfg, &m, &vals(99.0, 99.0), t0);
-        assert!(a.check(&cfg, &m, &vals(99.0, 99.0), t0 + Duration::from_secs(20)).is_empty());
+        assert!(
+            a.check(&cfg, &m, &vals(99.0, 99.0), t0 + Duration::from_secs(20))
+                .is_empty()
+        );
     }
 }

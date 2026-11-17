@@ -35,23 +35,59 @@ enum Action {
 
 /// ~/.cache entries that must never be offered: losing them breaks or
 /// signs things out, or they belong to us.
-const NEVER: &[&str] = &[APP_ID, "keyring", "dconf", "ibus", "flatpak", "evolution", "doc", "gnome-desktop-thumbnailer"];
+const NEVER: &[&str] = &[
+    APP_ID,
+    "keyring",
+    "dconf",
+    "ibus",
+    "flatpak",
+    "evolution",
+    "doc",
+    "gnome-desktop-thumbnailer",
+];
 /// Caches that rebuild themselves without anyone noticing: pre-checked.
 const SAFE: &[&str] = &[
-    "thumbnails", "mesa_shader_cache", "mesa_shader_cache_db", "nvidia", "radv_builtin_shaders", "fontconfig",
-    "pip", "go-build", "yarn", "pnpm", "mozilla", "google-chrome", "chromium", "BraveSoftware", "vivaldi",
-    "gstreamer-1.0", "babl", "gegl-0.4", "typescript", "node-gyp", "electron",
+    "thumbnails",
+    "mesa_shader_cache",
+    "mesa_shader_cache_db",
+    "nvidia",
+    "radv_builtin_shaders",
+    "fontconfig",
+    "pip",
+    "go-build",
+    "yarn",
+    "pnpm",
+    "mozilla",
+    "google-chrome",
+    "chromium",
+    "BraveSoftware",
+    "vivaldi",
+    "gstreamer-1.0",
+    "babl",
+    "gegl-0.4",
+    "typescript",
+    "node-gyp",
+    "electron",
 ];
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
 }
 
 /// Total size of a tree, without following symlinks.
 pub fn dir_size(p: &Path) -> u64 {
-    let Ok(meta) = fs::symlink_metadata(p) else { return 0 };
+    let Ok(meta) = fs::symlink_metadata(p) else {
+        return 0;
+    };
     if meta.is_dir() {
-        fs::read_dir(p).into_iter().flatten().flatten().map(|e| dir_size(&e.path())).sum()
+        fs::read_dir(p)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| dir_size(&e.path()))
+            .sum()
     } else {
         meta.len()
     }
@@ -68,22 +104,50 @@ impl Cleaner {
         let mut items = Vec::new();
         self.actions.clear();
         let h = home();
-        let mut add = |items: &mut Vec<CleanItem>, cat: &str, label: String, detail: String, size: u64, checked: bool, system: bool, a: Action| {
+        let mut add = |items: &mut Vec<CleanItem>,
+                       cat: &str,
+                       label: String,
+                       detail: String,
+                       size: u64,
+                       checked: bool,
+                       system: bool,
+                       a: Action| {
             if size == 0 && !matches!(a, Action::FlatpakUnused | Action::System(_)) {
                 return;
             }
-            items.push(CleanItem { id: self.actions.len() as u32, category: cat.into(), label, detail, size: size as f64, checked, system });
+            items.push(CleanItem {
+                id: self.actions.len() as u32,
+                category: cat.into(),
+                label,
+                detail,
+                size: size as f64,
+                checked,
+                system,
+            });
             self.actions.push(a);
         };
 
-        for e in fs::read_dir(h.join(".cache")).into_iter().flatten().flatten() {
+        for e in fs::read_dir(h.join(".cache"))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
             let name = e.file_name().to_string_lossy().into_owned();
             if NEVER.contains(&name.as_str()) || !e.path().is_dir() {
                 continue;
             }
             let size = dir_size(&e.path());
             let safe = SAFE.iter().any(|s| name.starts_with(s));
-            add(&mut items, "App caches", name.clone(), format!("~/.cache/{name}"), size, safe, false, Action::EmptyDir(e.path()));
+            add(
+                &mut items,
+                "App caches",
+                name.clone(),
+                format!("~/.cache/{name}"),
+                size,
+                safe,
+                false,
+                Action::EmptyDir(e.path()),
+            );
         }
 
         for (rel, label) in [
@@ -92,44 +156,114 @@ impl Cleaner {
             (".gradle/caches", "Gradle cache"),
         ] {
             let p = h.join(rel);
-            add(&mut items, "Developer", label.into(), format!("~/{rel}"), dir_size(&p), true, false, Action::EmptyDir(p));
+            add(
+                &mut items,
+                "Developer",
+                label.into(),
+                format!("~/{rel}"),
+                dir_size(&p),
+                true,
+                false,
+                Action::EmptyDir(p),
+            );
         }
 
         // Data of Flatpak apps that are no longer installed: strong
         // evidence, but it is user data, so it waits for the user's eye.
-        for e in fs::read_dir(h.join(".var/app")).into_iter().flatten().flatten() {
+        for e in fs::read_dir(h.join(".var/app"))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
             let id = e.file_name().to_string_lossy().into_owned();
             if !installed_flatpaks.is_empty() && !installed_flatpaks.contains(&id) {
                 let size = dir_size(&e.path());
-                add(&mut items, "Leftovers", id.clone(), format!("~/.var/app/{id} (app removed)"), size, false, false, Action::EmptyDir(e.path()));
+                add(
+                    &mut items,
+                    "Leftovers",
+                    id.clone(),
+                    format!("~/.var/app/{id} (app removed)"),
+                    size,
+                    false,
+                    false,
+                    Action::EmptyDir(e.path()),
+                );
             }
         }
 
         let trash = h.join(".local/share/Trash");
-        add(&mut items, "Trash", "Empty the Trash".into(), "Files you deleted earlier".into(), dir_size(&trash.join("files")), false, false, Action::EmptyTrash);
+        add(
+            &mut items,
+            "Trash",
+            "Empty the Trash".into(),
+            "Files you deleted earlier".into(),
+            dir_size(&trash.join("files")),
+            false,
+            false,
+            Action::EmptyTrash,
+        );
 
         let month = SystemTime::now() - Duration::from_secs(30 * 86_400);
         let shots: Vec<PathBuf> = fs::read_dir(h.join("Pictures/Screenshots"))
             .into_iter()
             .flatten()
             .flatten()
-            .filter(|e| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < month))
+            .filter(|e| {
+                e.metadata()
+                    .and_then(|m| m.modified())
+                    .is_ok_and(|t| t < month)
+            })
             .map(|e| e.path())
             .collect();
         let size = shots.iter().map(|p| dir_size(p)).sum();
-        add(&mut items, "Old screenshots", format!("{} screenshots older than 30 days", shots.len()), "~/Pictures/Screenshots".into(), size, false, false, Action::Files(shots));
+        add(
+            &mut items,
+            "Old screenshots",
+            format!("{} screenshots older than 30 days", shots.len()),
+            "~/Pictures/Screenshots".into(),
+            size,
+            false,
+            false,
+            Action::Files(shots),
+        );
 
         if !installed_flatpaks.is_empty() {
-            add(&mut items, "Flatpak", "Unused runtimes".into(), "Runtimes no installed app needs".into(), 0, false, false, Action::FlatpakUnused);
+            add(
+                &mut items,
+                "Flatpak",
+                "Unused runtimes".into(),
+                "Runtimes no installed app needs".into(),
+                0,
+                false,
+                false,
+                Action::FlatpakUnused,
+            );
         }
 
         let sys = [
             ("Package cache (dnf)", "/var/cache/libdnf5", "dnf clean all"),
-            ("System logs older than 2 weeks", "/var/log/journal", "journalctl --vacuum-time=2weeks"),
-            ("Crash reports", "/var/lib/systemd/coredump", "rm -f /var/lib/systemd/coredump/*"),
+            (
+                "System logs older than 2 weeks",
+                "/var/log/journal",
+                "journalctl --vacuum-time=2weeks",
+            ),
+            (
+                "Crash reports",
+                "/var/lib/systemd/coredump",
+                "rm -f /var/lib/systemd/coredump/*",
+            ),
         ];
         for (label, path, cmd) in sys {
-            add(&mut items, "System (needs password)", label.into(), path.into(), dir_size(Path::new(path)), false, true, Action::System(cmd));
+            add(
+                &mut items,
+                "System (needs password)",
+                label.into(),
+                path.into(),
+                dir_size(Path::new(path)),
+                false,
+                true,
+                Action::System(cmd),
+            );
         }
         items
     }
@@ -140,10 +274,14 @@ impl Cleaner {
         let mut freed = 0;
         let mut system = Vec::new();
         for id in ids {
-            let Some(a) = self.actions.get(*id as usize).cloned() else { continue };
+            let Some(a) = self.actions.get(*id as usize).cloned() else {
+                continue;
+            };
             match a {
                 Action::EmptyDir(p) => {
-                    freed += tokio::task::spawn_blocking(move || empty_dir(&p)).await.unwrap_or(0);
+                    freed += tokio::task::spawn_blocking(move || empty_dir(&p))
+                        .await
+                        .unwrap_or(0);
                 }
                 Action::Files(files) => {
                     for f in files {
@@ -153,10 +291,16 @@ impl Cleaner {
                 }
                 Action::EmptyTrash => {
                     freed += dir_size(&home().join(".local/share/Trash/files"));
-                    let _ = Command::new("gio").args(["trash", "--empty"]).status().await;
+                    let _ = Command::new("gio")
+                        .args(["trash", "--empty"])
+                        .status()
+                        .await;
                 }
                 Action::FlatpakUnused => {
-                    let _ = Command::new("flatpak").args(["uninstall", "--unused", "-y", "--noninteractive"]).status().await;
+                    let _ = Command::new("flatpak")
+                        .args(["uninstall", "--unused", "-y", "--noninteractive"])
+                        .status()
+                        .await;
                 }
                 Action::System(cmd) => system.push(cmd),
             }
@@ -165,7 +309,11 @@ impl Cleaner {
             // One password prompt for all system items. Only the fixed
             // commands above are ever joined here.
             let script = system.join("; ");
-            let st = Command::new("pkexec").args(["/bin/sh", "-c", &script]).status().await.map_err(|e| e.to_string())?;
+            let st = Command::new("pkexec")
+                .args(["/bin/sh", "-c", &script])
+                .status()
+                .await
+                .map_err(|e| e.to_string())?;
             if !st.success() {
                 return Err("System cleanup was cancelled or failed.".into());
             }

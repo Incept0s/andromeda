@@ -43,7 +43,12 @@ pub struct MetricInfo {
 
 impl MetricInfo {
     pub fn new(id: impl Into<String>, name: impl Into<String>, unit: Unit, group: Group) -> Self {
-        Self { id: id.into(), name: name.into(), unit, group }
+        Self {
+            id: id.into(),
+            name: name.into(),
+            unit,
+            group,
+        }
     }
 }
 
@@ -60,8 +65,21 @@ macro_rules! str_enum {
         }
     };
 }
-str_enum!(Unit, Percent, Celsius, Bytes, BytesPerSecond, Watts, Hertz, Rpm, Seconds, Flag);
-str_enum!(Group, Cpu, Gpu, Memory, Battery, Network, Disk, Fans, Temps, System);
+str_enum!(
+    Unit,
+    Percent,
+    Celsius,
+    Bytes,
+    BytesPerSecond,
+    Watts,
+    Hertz,
+    Rpm,
+    Seconds,
+    Flag
+);
+str_enum!(
+    Group, Cpu, Gpu, Memory, Battery, Network, Disk, Fans, Temps, System
+);
 
 /// Human-readable value, e.g. `42%`, `61 °C`, `11.4 GiB`, `4.2 GHz`.
 pub fn format(value: f64, unit: Unit) -> String {

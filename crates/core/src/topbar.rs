@@ -29,7 +29,9 @@ fn prefix(m: &MetricInfo, gpu_count: usize) -> String {
         (Group::Memory, "pressure") => "PSI".into(),
         (Group::Gpu, "vram_used") => "VRAM".into(),
         // Several GPUs: tell them apart by the first word of their name.
-        (Group::Gpu, _) if gpu_count > 1 => m.name.split_whitespace().next().unwrap_or("GPU").into(),
+        (Group::Gpu, _) if gpu_count > 1 => {
+            m.name.split_whitespace().next().unwrap_or("GPU").into()
+        }
         (Group::Gpu, _) => "GPU".into(),
         (Group::Battery, "power") => String::new(),
         (Group::Battery, _) => "BAT".into(),
@@ -57,8 +59,15 @@ fn value(v: f64, unit: Unit) -> String {
 
 /// Joins the chosen metrics that currently have a value. Missing ones
 /// (a sensor that vanished) are skipped rather than shown as gaps.
-pub fn text(ids: &[String], metrics: &[MetricInfo], values: &std::collections::HashMap<String, f64>) -> String {
-    let gpus = metrics.iter().filter(|m| m.group == Group::Gpu && m.id.ends_with(".usage")).count();
+pub fn text(
+    ids: &[String],
+    metrics: &[MetricInfo],
+    values: &std::collections::HashMap<String, f64>,
+) -> String {
+    let gpus = metrics
+        .iter()
+        .filter(|m| m.group == Group::Gpu && m.id.ends_with(".usage"))
+        .count();
     ids.iter()
         .filter_map(|id| {
             let m = metrics.iter().find(|m| &m.id == id)?;
@@ -72,7 +81,13 @@ pub fn text(ids: &[String], metrics: &[MetricInfo], values: &std::collections::H
             } else {
                 value(v, m.unit)
             };
-            Some(if p.is_empty() { s } else if p.len() <= 3 && !p.is_ascii() { format!("{p}{s}") } else { format!("{p} {s}") })
+            Some(if p.is_empty() {
+                s
+            } else if p.len() <= 3 && !p.is_ascii() {
+                format!("{p}{s}")
+            } else {
+                format!("{p} {s}")
+            })
         })
         .collect::<Vec<_>>()
         .join("  ")
@@ -88,8 +103,18 @@ mod tests {
         let m = vec![
             MetricInfo::new("cpu.temp", "CPU temperature", Unit::Celsius, Group::Cpu),
             MetricInfo::new("mem.used_pct", "Memory used", Unit::Percent, Group::Memory),
-            MetricInfo::new("bat.BAT0.power", "Battery power", Unit::Watts, Group::Battery),
-            MetricInfo::new("gpu.nvidia0.vram_used", "RTX 5070 Ti memory used", Unit::Bytes, Group::Gpu),
+            MetricInfo::new(
+                "bat.BAT0.power",
+                "Battery power",
+                Unit::Watts,
+                Group::Battery,
+            ),
+            MetricInfo::new(
+                "gpu.nvidia0.vram_used",
+                "RTX 5070 Ti memory used",
+                Unit::Bytes,
+                Group::Gpu,
+            ),
             MetricInfo::new("net.rx", "Download", Unit::BytesPerSecond, Group::Network),
         ];
         let v = HashMap::from([
@@ -99,9 +124,16 @@ mod tests {
             ("gpu.nvidia0.vram_used".to_string(), 6.2 * 1024f64.powi(3)),
             ("net.rx".to_string(), 1.5 * 1024.0 * 1024.0),
         ]);
-        let ids: Vec<String> = ["cpu.temp", "mem.used_pct", "bat.BAT0.power", "gpu.nvidia0.vram_used", "net.rx", "gone"]
-            .map(String::from)
-            .into();
+        let ids: Vec<String> = [
+            "cpu.temp",
+            "mem.used_pct",
+            "bat.BAT0.power",
+            "gpu.nvidia0.vram_used",
+            "net.rx",
+            "gone",
+        ]
+        .map(String::from)
+        .into();
         assert_eq!(text(&ids, &m, &v), "CPU 42°  RAM 61%  12W  VRAM 6.2G  ↓2M");
         let mut idle = v.clone();
         idle.insert("bat.BAT0.power".into(), 0.0);
@@ -113,11 +145,29 @@ mod tests {
     fn two_gpus_use_their_names() {
         let m = vec![
             MetricInfo::new("gpu.card1.usage", "Radeon 610M", Unit::Percent, Group::Gpu),
-            MetricInfo::new("gpu.card1.temp", "Radeon 610M temperature", Unit::Celsius, Group::Gpu),
-            MetricInfo::new("gpu.nvidia0.usage", "RTX 5070 Ti", Unit::Percent, Group::Gpu),
-            MetricInfo::new("gpu.nvidia0.temp", "RTX 5070 Ti temperature", Unit::Celsius, Group::Gpu),
+            MetricInfo::new(
+                "gpu.card1.temp",
+                "Radeon 610M temperature",
+                Unit::Celsius,
+                Group::Gpu,
+            ),
+            MetricInfo::new(
+                "gpu.nvidia0.usage",
+                "RTX 5070 Ti",
+                Unit::Percent,
+                Group::Gpu,
+            ),
+            MetricInfo::new(
+                "gpu.nvidia0.temp",
+                "RTX 5070 Ti temperature",
+                Unit::Celsius,
+                Group::Gpu,
+            ),
         ];
-        let v = HashMap::from([("gpu.card1.temp".to_string(), 61.0), ("gpu.nvidia0.temp".to_string(), 55.0)]);
+        let v = HashMap::from([
+            ("gpu.card1.temp".to_string(), 61.0),
+            ("gpu.nvidia0.temp".to_string(), 55.0),
+        ]);
         let ids = vec!["gpu.card1.temp".to_string(), "gpu.nvidia0.temp".to_string()];
         assert_eq!(text(&ids, &m, &v), "Radeon 61°  RTX 55°");
     }

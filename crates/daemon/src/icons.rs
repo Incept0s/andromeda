@@ -22,7 +22,9 @@ fn roots() -> Vec<PathBuf> {
     .collect()
 }
 
-const SIZES: [&str; 6] = ["scalable", "128x128", "64x64", "48x48", "256x256", "512x512"];
+const SIZES: [&str; 6] = [
+    "scalable", "128x128", "64x64", "48x48", "256x256", "512x512",
+];
 
 fn find(name: &str) -> Option<PathBuf> {
     if name.starts_with('/') {
@@ -38,7 +40,10 @@ fn find(name: &str) -> Option<PathBuf> {
             }
         }
     }
-    ["png", "svg"].iter().map(|e| PathBuf::from(format!("/usr/share/pixmaps/{name}.{e}"))).find(|p| p.exists())
+    ["png", "svg"]
+        .iter()
+        .map(|e| PathBuf::from(format!("/usr/share/pixmaps/{name}.{e}")))
+        .find(|p| p.exists())
 }
 
 /// Base64 for data URLs (RFC 4648, with padding).
@@ -46,7 +51,9 @@ fn base64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for c in data.chunks(3) {
-        let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
+        let n = (u32::from(c[0]) << 16)
+            | (u32::from(*c.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*c.get(2).unwrap_or(&0));
         for i in 0..4 {
             if i <= c.len() {
                 out.push(T[(n >> (18 - 6 * i) & 63) as usize] as char);
@@ -81,7 +88,11 @@ impl Icons {
                 (bytes.len() < 512 * 1024).then_some((p, bytes))
             })
             .map(|(p, bytes)| {
-                let mime = if p.extension().is_some_and(|e| e == "svg") { "image/svg+xml" } else { "image/png" };
+                let mime = if p.extension().is_some_and(|e| e == "svg") {
+                    "image/svg+xml"
+                } else {
+                    "image/png"
+                };
                 format!("data:{mime};base64,{}", base64(&bytes))
             })
             .unwrap_or_default();

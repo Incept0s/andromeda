@@ -35,7 +35,11 @@ fn volumes() -> Vec<(String, String)> {
 fn io_disks() -> Vec<String> {
     data().metrics.with(|ms| {
         ms.iter()
-            .filter_map(|m| m.id.strip_prefix("disk.")?.strip_suffix(".read").map(str::to_owned))
+            .filter_map(|m| {
+                m.id.strip_prefix("disk.")?
+                    .strip_suffix(".read")
+                    .map(str::to_owned)
+            })
             .collect()
     })
 }

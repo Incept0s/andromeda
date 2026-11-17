@@ -8,9 +8,9 @@ use andromeda_core::tools::{CleanItem, ClipEntry, ConvertOption, Package, PkgSou
 use leptos::prelude::*;
 use serde::Serialize;
 
+use crate::Icon;
 use crate::tauri;
 use crate::widgets::{POLL_FAST, poll};
-use crate::Icon;
 
 #[derive(Clone, Copy, PartialEq)]
 enum View {
@@ -74,7 +74,13 @@ fn file_name(p: &str) -> String {
 }
 
 fn parent(p: &str) -> String {
-    p.rsplit_once('/').map_or("/".into(), |(d, _)| if d.is_empty() { "/".into() } else { d.to_owned() })
+    p.rsplit_once('/').map_or("/".into(), |(d, _)| {
+        if d.is_empty() {
+            "/".into()
+        } else {
+            d.to_owned()
+        }
+    })
 }
 
 #[component]
@@ -88,7 +94,12 @@ fn Back(view: RwSignal<View>, title: &'static str) -> impl IntoView {
 }
 
 #[component]
-fn ToolCard(icon: &'static str, title: &'static str, desc: &'static str, on_click: impl Fn() + 'static) -> impl IntoView {
+fn ToolCard(
+    icon: &'static str,
+    title: &'static str,
+    desc: &'static str,
+    on_click: impl Fn() + 'static,
+) -> impl IntoView {
     view! {
         <button class="toolcard" on:click=move |_| on_click()>
             <Icon name=icon />
@@ -108,7 +119,14 @@ fn Clipboard(view: RwSignal<View>) -> impl IntoView {
     let copied = RwSignal::new(None::<u64>);
     let refresh = move || {
         tauri::spawn(async move {
-            if let Ok(v) = tauri::invoke("clipboard_list", &Query { query: query.get_untracked() }).await {
+            if let Ok(v) = tauri::invoke(
+                "clipboard_list",
+                &Query {
+                    query: query.get_untracked(),
+                },
+            )
+            .await
+            {
                 items.set(v);
             }
         });
@@ -160,11 +178,15 @@ fn Convert(view: RwSignal<View>, file: RwSignal<Option<String>>) -> impl IntoVie
         }
     });
     let run = move |target: String| {
-        let Some(path) = file.get_untracked() else { return };
+        let Some(path) = file.get_untracked() else {
+            return;
+        };
         busy.set(Some(target.clone()));
         result.set(None);
         tauri::spawn(async move {
-            result.set(Some(tauri::invoke::<_, String>("convert", &ConvertArg { path, target }).await));
+            result.set(Some(
+                tauri::invoke::<_, String>("convert", &ConvertArg { path, target }).await,
+            ));
             busy.set(None);
         });
     };
@@ -233,7 +255,14 @@ fn Cleaner(view: RwSignal<View>) -> impl IntoView {
     };
     scan();
     let total = move || {
-        items.with(|v| v.as_ref().map_or(0.0, |v| v.iter().filter(|i| selected.with(|s| s.contains(&i.id))).map(|i| i.size).sum()))
+        items.with(|v| {
+            v.as_ref().map_or(0.0, |v| {
+                v.iter()
+                    .filter(|i| selected.with(|s| s.contains(&i.id)))
+                    .map(|i| i.size)
+                    .sum()
+            })
+        })
     };
     let clean = move |_| {
         if !confirm.get() {
@@ -288,8 +317,17 @@ fn Cleaner(view: RwSignal<View>) -> impl IntoView {
 }
 
 #[component]
-fn PackageRow(p: Package, busy: RwSignal<Option<String>>, error: RwSignal<String>, after: Callback<()>) -> impl IntoView {
-    let source = if p.source == PkgSource::Flatpak { "flatpak" } else { "rpm" };
+fn PackageRow(
+    p: Package,
+    busy: RwSignal<Option<String>>,
+    error: RwSignal<String>,
+    after: Callback<()>,
+) -> impl IntoView {
+    let source = if p.source == PkgSource::Flatpak {
+        "flatpak"
+    } else {
+        "rpm"
+    };
     let (id, id2) = (p.id.clone(), p.id.clone());
     let action = if p.installed { "remove" } else { "install" };
     let act = move |_| {
@@ -297,7 +335,9 @@ fn PackageRow(p: Package, busy: RwSignal<Option<String>>, error: RwSignal<String
         busy.set(Some(id.clone()));
         error.set(String::new());
         tauri::spawn(async move {
-            if let Err(e) = tauri::invoke::<_, ()>("pkg_action", &Action { source, action, id }).await {
+            if let Err(e) =
+                tauri::invoke::<_, ()>("pkg_action", &Action { source, action, id }).await
+            {
                 error.set(e);
             }
             busy.set(None);
@@ -332,9 +372,21 @@ fn Packages(view: RwSignal<View>) -> impl IntoView {
         }
         status.set("Searching…".into());
         tauri::spawn(async move {
-            match tauri::invoke::<_, Vec<Package>>("pkg_search", &Search { source: source.get_untracked(), query: q }).await {
+            match tauri::invoke::<_, Vec<Package>>(
+                "pkg_search",
+                &Search {
+                    source: source.get_untracked(),
+                    query: q,
+                },
+            )
+            .await
+            {
                 Ok(v) => {
-                    status.set(if v.is_empty() { "Nothing found.".into() } else { String::new() });
+                    status.set(if v.is_empty() {
+                        "Nothing found.".into()
+                    } else {
+                        String::new()
+                    });
                     results.set(v);
                 }
                 Err(e) => status.set(e),
@@ -400,7 +452,12 @@ fn Packages(view: RwSignal<View>) -> impl IntoView {
 }
 
 #[component]
-fn Shelf(view: RwSignal<View>, items: RwSignal<Vec<ShelfItem>>, refresh: Callback<()>, convert: Callback<String>) -> impl IntoView {
+fn Shelf(
+    view: RwSignal<View>,
+    items: RwSignal<Vec<ShelfItem>>,
+    refresh: Callback<()>,
+    convert: Callback<String>,
+) -> impl IntoView {
     view! {
         <Back view title="Shelf" />
         <div class="dropzone"><span class="muted">"Drop files here to keep them handy"</span></div>

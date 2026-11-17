@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Checks every push and pull request: formatting, lints, tests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y git gcc rust cargo rustfmt clippy rust-std-static-wasm32-unknown-unknown \
+            webkit2gtk4.1-devel gtk3-devel libsoup3-devel openssl-devel pulseaudio-libs-devel
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            target
+          key: ci-fedora44-${{ hashFiles('Cargo.lock') }}
+
+      # The panel embeds frontend/dist at compile time. Checks do not need the
+      # real WebAssembly build, so an empty page stands in for it.
+      - name: Placeholder frontend
+        run: mkdir -p frontend/dist && echo '<!doctype html>' > frontend/dist/index.html
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: |
+          cargo clippy --locked --workspace --exclude andromeda-frontend -- -D warnings
+          cargo clippy --locked -p andromeda-frontend --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked --workspace --exclude andromeda-frontend

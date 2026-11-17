@@ -44,10 +44,12 @@ pub fn NetworkTab() -> impl IntoView {
     let run_test = move |_| {
         test.set(Test::Running);
         tauri::spawn(async move {
-            test.set(match tauri::invoke::<(), SpeedResult>("speed_test", &()).await {
-                Ok(r) => Test::Done(r),
-                Err(e) => Test::Failed(e),
-            });
+            test.set(
+                match tauri::invoke::<(), SpeedResult>("speed_test", &()).await {
+                    Ok(r) => Test::Done(r),
+                    Err(e) => Test::Failed(e),
+                },
+            );
         });
     };
     let mbit = |bps: f64| format!("{:.0} Mbit/s", bps * 8.0 / 1e6);

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Regenerates THIRD-PARTY-LICENSES.md: every Rust crate compiled into
 # Andromeda (all targets, normal dependencies) with its licence.
 set -euo pipefail

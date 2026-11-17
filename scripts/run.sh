@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Starts the current build: stops old copies, starts the daemon, opens the panel.
 # Without the Shell extension enabled, GNOME places the panel itself.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

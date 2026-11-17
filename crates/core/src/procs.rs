@@ -91,7 +91,9 @@ impl Procs {
     /// Apps sorted by CPU, busiest first. The first call has no previous
     /// reading, so it reports 0 % CPU for everything.
     pub fn sample(&mut self) -> Vec<AppUsage> {
-        let total = fs::read_to_string(self.proc_.join("stat")).ok().and_then(|t| cpu::parse_proc_stat(&t));
+        let total = fs::read_to_string(self.proc_.join("stat"))
+            .ok()
+            .and_then(|t| cpu::parse_proc_stat(&t));
         let elapsed = match (self.prev_total, total) {
             (Some(p), Some(c)) => c.total.saturating_sub(p.total) as f64,
             _ => 0.0,
@@ -99,9 +101,18 @@ impl Procs {
         let mut apps: HashMap<String, AppUsage> = HashMap::new();
         let mut now = HashMap::new();
         for entry in fs::read_dir(&self.proc_).into_iter().flatten().flatten() {
-            let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
+            let Some(pid) = entry
+                .file_name()
+                .to_str()
+                .and_then(|s| s.parse::<u32>().ok())
+            else {
+                continue;
+            };
             let dir = entry.path();
-            let Some((comm, ticks)) = fs::read_to_string(dir.join("stat")).ok().and_then(|s| parse_stat_ticks(&s)) else {
+            let Some((comm, ticks)) = fs::read_to_string(dir.join("stat"))
+                .ok()
+                .and_then(|s| parse_stat_ticks(&s))
+            else {
                 continue;
             };
             // Kernel threads have no memory map; skip them.
@@ -117,7 +128,13 @@ impl Procs {
             let cg = fs::read_to_string(dir.join("cgroup")).unwrap_or_default();
             let key = app_id_from_cgroup(&cg).unwrap_or(comm);
             let name = self.display_name(&key);
-            let app = apps.entry(key.clone()).or_insert(AppUsage { key, name, cpu: 0.0, memory: 0.0, processes: 0 });
+            let app = apps.entry(key.clone()).or_insert(AppUsage {
+                key,
+                name,
+                cpu: 0.0,
+                memory: 0.0,
+                processes: 0,
+            });
             if elapsed > 0.0 {
                 // Process ticks and /proc/stat jiffies use the same clock
                 // (USER_HZ), so the ratio is the share of all CPU time.
@@ -146,7 +163,9 @@ impl Procs {
 
 /// `Name=` from the app's .desktop file, else the key itself.
 pub fn display_name(key: &str) -> String {
-    desktop_entry(key).map(|(n, _)| n).unwrap_or_else(|| key.to_owned())
+    desktop_entry(key)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| key.to_owned())
 }
 
 /// (`Name=`, `Icon=`) of `<id>.desktop` (also tried lowercase) from the
@@ -166,8 +185,14 @@ pub fn desktop_entry(id: &str) -> Option<(String, Option<String>)> {
         .find_map(|p| fs::read_to_string(p).ok())?;
     // Only the main [Desktop Entry] group, not actions.
     let main = text.split("\n[").next().unwrap_or(&text);
-    let name = main.lines().find_map(|l| l.strip_prefix("Name="))?.to_owned();
-    let icon = main.lines().find_map(|l| l.strip_prefix("Icon=")).map(str::to_owned);
+    let name = main
+        .lines()
+        .find_map(|l| l.strip_prefix("Name="))?
+        .to_owned();
+    let icon = main
+        .lines()
+        .find_map(|l| l.strip_prefix("Icon="))
+        .map(str::to_owned);
     Some((name, icon))
 }
 
@@ -177,13 +202,33 @@ mod tests {
 
     #[test]
     fn app_ids() {
-        let cg = |unit: &str| format!("0::/user.slice/user-1000.slice/user@1000.service/app.slice/{unit}\n");
-        assert_eq!(app_id_from_cgroup(&cg("app-gnome-firefox-12345.scope")), Some("firefox".into()));
-        assert_eq!(app_id_from_cgroup(&cg("app-flatpak-com.discordapp.Discord-3687345403.scope")), Some("com.discordapp.Discord".into()));
-        assert_eq!(app_id_from_cgroup(&cg("app-gnome-google\\x2dchrome-77.scope")), Some("google-chrome".into()));
-        assert_eq!(app_id_from_cgroup(&cg("dbus-:1.1-org.gnome.Loupe@0.service")), Some("org.gnome.Loupe".into()));
-        assert_eq!(app_id_from_cgroup(&cg("app-gnome-dev.warp.Warp-98922.scope")), Some("dev.warp.Warp".into()));
-        assert_eq!(app_id_from_cgroup(&cg("org.gnome.Shell@user.service")), None);
+        let cg = |unit: &str| {
+            format!("0::/user.slice/user-1000.slice/user@1000.service/app.slice/{unit}\n")
+        };
+        assert_eq!(
+            app_id_from_cgroup(&cg("app-gnome-firefox-12345.scope")),
+            Some("firefox".into())
+        );
+        assert_eq!(
+            app_id_from_cgroup(&cg("app-flatpak-com.discordapp.Discord-3687345403.scope")),
+            Some("com.discordapp.Discord".into())
+        );
+        assert_eq!(
+            app_id_from_cgroup(&cg("app-gnome-google\\x2dchrome-77.scope")),
+            Some("google-chrome".into())
+        );
+        assert_eq!(
+            app_id_from_cgroup(&cg("dbus-:1.1-org.gnome.Loupe@0.service")),
+            Some("org.gnome.Loupe".into())
+        );
+        assert_eq!(
+            app_id_from_cgroup(&cg("app-gnome-dev.warp.Warp-98922.scope")),
+            Some("dev.warp.Warp".into())
+        );
+        assert_eq!(
+            app_id_from_cgroup(&cg("org.gnome.Shell@user.service")),
+            None
+        );
         assert_eq!(app_id_from_cgroup(&cg("app-gnome-23707.scope")), None);
         assert_eq!(app_id_from_cgroup(""), None);
     }

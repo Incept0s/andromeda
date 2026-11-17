@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Tabular digits keep the numbers from jittering as they change. */
 .andromeda-label {
   font-feature-settings: "tnum";

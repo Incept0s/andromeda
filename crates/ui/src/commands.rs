@@ -67,7 +67,9 @@ pub trait Daemon {
 type R<T> = Result<T, String>;
 
 pub async fn daemon(app: &AppHandle) -> R<DaemonProxy<'static>> {
-    let conn = app.try_state::<zbus::Connection>().ok_or("D-Bus not ready")?;
+    let conn = app
+        .try_state::<zbus::Connection>()
+        .ok_or("D-Bus not ready")?;
     DaemonProxy::new(&conn).await.map_err(|e| e.to_string())
 }
 
@@ -89,7 +91,14 @@ pub async fn metrics(app: AppHandle) -> R<Vec<MetricInfo>> {
     let list = daemon(&app).await?.metrics().await.map_err(err)?;
     Ok(list
         .into_iter()
-        .filter_map(|(id, name, unit, group)| Some(MetricInfo::new(id, name, Unit::parse(&unit)?, Group::parse(&group)?)))
+        .filter_map(|(id, name, unit, group)| {
+            Some(MetricInfo::new(
+                id,
+                name,
+                Unit::parse(&unit)?,
+                Group::parse(&group)?,
+            ))
+        })
         .collect())
 }
 
@@ -131,7 +140,11 @@ pub async fn power_profile(app: AppHandle) -> R<(String, Vec<String>)> {
 
 #[tauri::command]
 pub async fn set_power_profile(app: AppHandle, profile: String) -> R<()> {
-    daemon(&app).await?.set_power_profile(&profile).await.map_err(err)
+    daemon(&app)
+        .await?
+        .set_power_profile(&profile)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -139,7 +152,13 @@ pub async fn top_apps(app: AppHandle, limit: u32) -> R<Vec<AppUsage>> {
     let list = daemon(&app).await?.top_apps(limit).await.map_err(err)?;
     Ok(list
         .into_iter()
-        .map(|(key, name, cpu, memory, processes)| AppUsage { key, name, cpu, memory, processes })
+        .map(|(key, name, cpu, memory, processes)| AppUsage {
+            key,
+            name,
+            cpu,
+            memory,
+            processes,
+        })
         .collect())
 }
 
@@ -193,22 +212,38 @@ pub async fn mixer(app: AppHandle) -> R<MixerState> {
 
 #[tauri::command]
 pub async fn mixer_volume(app: AppHandle, key: String, percent: f64) -> R<()> {
-    daemon(&app).await?.mixer_volume(&key, percent).await.map_err(err)
+    daemon(&app)
+        .await?
+        .mixer_volume(&key, percent)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
 pub async fn mixer_mute(app: AppHandle, key: String, mute: bool) -> R<()> {
-    daemon(&app).await?.mixer_mute(&key, mute).await.map_err(err)
+    daemon(&app)
+        .await?
+        .mixer_mute(&key, mute)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
 pub async fn mixer_output(app: AppHandle, key: String, sink: String) -> R<()> {
-    daemon(&app).await?.mixer_output(&key, &sink).await.map_err(err)
+    daemon(&app)
+        .await?
+        .mixer_output(&key, &sink)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
 pub async fn mixer_default(app: AppHandle, kind: String, name: String) -> R<()> {
-    daemon(&app).await?.mixer_default(&kind, &name).await.map_err(err)
+    daemon(&app)
+        .await?
+        .mixer_default(&kind, &name)
+        .await
+        .map_err(err)
 }
 
 /// Opens a folder (a disk's mount point) in the file manager.
@@ -219,7 +254,12 @@ pub fn open_path(path: String) -> R<()> {
     if !p.is_absolute() || !p.is_dir() {
         return Err("not a folder".into());
     }
-    std::process::Command::new("gio").arg("open").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
+    std::process::Command::new("gio")
+        .arg("open")
+        .arg(p)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -241,7 +281,13 @@ pub fn open_releases() -> R<()> {
 
 #[tauri::command]
 pub async fn clipboard_list(app: AppHandle, query: String) -> R<Vec<ClipEntry>> {
-    json(daemon(&app).await?.clipboard_list(&query).await.map_err(err)?)
+    json(
+        daemon(&app)
+            .await?
+            .clipboard_list(&query)
+            .await
+            .map_err(err)?,
+    )
 }
 
 #[tauri::command]
@@ -251,7 +297,11 @@ pub async fn clipboard_copy(app: AppHandle, id: u64) -> R<()> {
 
 #[tauri::command]
 pub async fn clipboard_pin(app: AppHandle, id: u64, pinned: bool) -> R<()> {
-    daemon(&app).await?.clipboard_pin(id, pinned).await.map_err(err)
+    daemon(&app)
+        .await?
+        .clipboard_pin(id, pinned)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -335,7 +385,9 @@ pub async fn pkg_search(app: AppHandle, source: String, query: String) -> R<Vec<
 
 #[tauri::command]
 pub async fn pkg_action(app: AppHandle, source: String, action: String, id: String) -> R<()> {
-    job(&app, "pkg_action", &[&source, &action, &id]).await.map(|_| ())
+    job(&app, "pkg_action", &[&source, &action, &id])
+        .await
+        .map(|_| ())
 }
 
 #[tauri::command]
@@ -355,7 +407,12 @@ pub fn open_file(path: String) -> R<()> {
     if !p.is_absolute() || !p.exists() {
         return Err("not found".into());
     }
-    std::process::Command::new("gio").arg("open").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
+    std::process::Command::new("gio")
+        .arg("open")
+        .arg(p)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

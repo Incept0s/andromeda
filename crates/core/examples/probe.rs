@@ -13,7 +13,17 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_millis(500));
     let values = s.sample();
     for m in s.metrics() {
-        let v = values.iter().find(|(id, _)| *id == m.id).map(|(_, v)| format(*v, m.unit));
-        println!("{:<28} {:<26} {:?}/{:?}  {}", m.id, m.name, m.group, m.unit, v.unwrap_or("-".into()));
+        let v = values
+            .iter()
+            .find(|(id, _)| *id == m.id)
+            .map(|(_, v)| format(*v, m.unit));
+        println!(
+            "{:<28} {:<26} {:?}/{:?}  {}",
+            m.id,
+            m.name,
+            m.group,
+            m.unit,
+            v.unwrap_or("-".into())
+        );
     }
 }

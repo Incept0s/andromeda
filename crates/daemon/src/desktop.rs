@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 
-use zbus::proxy;
 use zbus::Variant;
+use zbus::proxy;
 
 #[proxy(
     interface = "org.freedesktop.Notifications",
@@ -28,9 +28,20 @@ pub trait Notifications {
 }
 
 pub async fn notify(conn: &zbus::Connection, summary: &str, body: &str) {
-    let Ok(p) = NotificationsProxy::new(conn).await else { return };
+    let Ok(p) = NotificationsProxy::new(conn).await else {
+        return;
+    };
     let _ = p
-        .notify("Andromeda", 0, "io.github.incept0s.Andromeda", summary, body, &[], HashMap::new(), -1)
+        .notify(
+            "Andromeda",
+            0,
+            "io.github.incept0s.Andromeda",
+            summary,
+            body,
+            &[],
+            HashMap::new(),
+            -1,
+        )
         .await;
 }
 
@@ -42,7 +53,13 @@ pub async fn notify(conn: &zbus::Connection, summary: &str, body: &str) {
     default_path = "/org/gnome/SessionManager"
 )]
 pub trait SessionManager {
-    fn inhibit(&self, app_id: &str, toplevel_xid: u32, reason: &str, flags: u32) -> zbus::Result<u32>;
+    fn inhibit(
+        &self,
+        app_id: &str,
+        toplevel_xid: u32,
+        reason: &str,
+        flags: u32,
+    ) -> zbus::Result<u32>;
     fn uninhibit(&self, cookie: u32) -> zbus::Result<()>;
 }
 

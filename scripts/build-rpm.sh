@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds Andromeda and packs it into an RPM under target/rpm/RPMS/.
 # Needs: cargo, the wasm32-unknown-unknown target, trunk, rpm-build,
 # systemd-rpm-macros and the WebKitGTK/GTK development packages

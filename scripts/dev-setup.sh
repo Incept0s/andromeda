@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Development setup: builds everything and wires it into your user session
 # without root. Undo with: scripts/dev-setup.sh --remove
 set -euo pipefail

@@ -47,12 +47,15 @@ impl Data {
         self.values.with(|m| m.get(id).copied())
     }
     pub fn info(&self, id: &str) -> Option<MetricInfo> {
-        self.metrics.with(|m| m.iter().find(|x| x.id == id).cloned())
+        self.metrics
+            .with(|m| m.iter().find(|x| x.id == id).cloned())
     }
     /// Applies `f` to a copy of the settings and sends it to the daemon,
     /// which saves it and echoes it back as a `config` event.
     pub fn edit_config(&self, f: impl FnOnce(&mut Config)) {
-        let Some(mut c) = self.config.get_untracked() else { return };
+        let Some(mut c) = self.config.get_untracked() else {
+            return;
+        };
         f(&mut c);
         self.config.set(Some(c.clone()));
         tauri::call("set_config", ConfigArg { config: c });
@@ -86,7 +89,8 @@ fn start_data() -> Data {
                 data.metrics.set(list);
             }
             if let Some(h) = tauri::get::<HashMap<String, Vec<f64>>>("history").await {
-                data.history.set(h.into_iter().map(|(k, v)| (k, v.into())).collect());
+                data.history
+                    .set(h.into_iter().map(|(k, v)| (k, v.into())).collect());
             }
             if let Some(c) = tauri::get::<Config>("config").await {
                 data.config.set(Some(c));
@@ -135,8 +139,14 @@ enum Tab {
 
 impl Tab {
     const ALL: [Tab; 8] = [
-        Tab::Awake, Tab::Mixer, Tab::System, Tab::Network,
-        Tab::Disk, Tab::Energy, Tab::Tools, Tab::Controls,
+        Tab::Awake,
+        Tab::Mixer,
+        Tab::System,
+        Tab::Network,
+        Tab::Disk,
+        Tab::Energy,
+        Tab::Tools,
+        Tab::Controls,
     ];
     fn title(self) -> &'static str {
         match self {
@@ -192,7 +202,10 @@ fn Panel() -> impl IntoView {
     let (tab, set_tab) = signal(Tab::System);
     let tabs = move || {
         data.config.with(|c| match c {
-            Some(c) => Tab::ALL.into_iter().filter(|t| t.enabled(c)).collect::<Vec<_>>(),
+            Some(c) => Tab::ALL
+                .into_iter()
+                .filter(|t| t.enabled(c))
+                .collect::<Vec<_>>(),
             None => Tab::ALL.to_vec(),
         })
     };
@@ -208,7 +221,14 @@ fn Panel() -> impl IntoView {
 
     // While Tools is open the panel stays when it loses focus, so files can
     // be dragged in from another window. Escape always closes the panel.
-    Effect::new(move |_| tauri::call("set_sticky", Sticky { sticky: tab.get() == Tab::Tools }));
+    Effect::new(move |_| {
+        tauri::call(
+            "set_sticky",
+            Sticky {
+                sticky: tab.get() == Tab::Tools,
+            },
+        )
+    });
     let _ = window_event_listener(leptos::ev::keydown, |e| {
         if e.key() == "Escape" {
             tauri::call("hide", ());

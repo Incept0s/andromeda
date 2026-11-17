@@ -15,7 +15,9 @@ fn on_path(bin: &str) -> bool {
 
 async fn has_name(conn: Option<&zbus::Connection>, name: &str) -> bool {
     let Some(conn) = conn else { return false };
-    let Ok(dbus) = DBusProxy::new(conn).await else { return false };
+    let Ok(dbus) = DBusProxy::new(conn).await else {
+        return false;
+    };
     let Ok(n) = name.try_into() else { return false };
     dbus.name_has_owner(n).await.unwrap_or(false)
 }
@@ -32,10 +34,15 @@ async fn extension_active(session: &zbus::Connection) -> bool {
         )
         .await;
     let Ok(reply) = reply else { return false };
-    let Ok(info) = reply.body().deserialize::<std::collections::HashMap<String, zbus::OwnedVariant>>() else {
+    let Ok(info) = reply
+        .body()
+        .deserialize::<std::collections::HashMap<String, zbus::OwnedVariant>>()
+    else {
         return false;
     };
-    info.get("state").and_then(|v| f64::try_from(v.try_clone().ok()?).ok()) == Some(1.0)
+    info.get("state")
+        .and_then(|v| f64::try_from(v.try_clone().ok()?).ok())
+        == Some(1.0)
 }
 
 pub async fn run(
@@ -51,7 +58,9 @@ pub async fn run(
     };
     let count = |g: Group| metrics.iter().filter(|m| m.group == g).count();
     let nvidia = metrics.iter().any(|m| m.id.starts_with("gpu.nvidia"));
-    let other_gpu = metrics.iter().any(|m| m.group == Group::Gpu && !m.id.starts_with("gpu.nvidia"));
+    let other_gpu = metrics
+        .iter()
+        .any(|m| m.group == Group::Gpu && !m.id.starts_with("gpu.nvidia"));
     vec![
         c(
             "GNOME Shell extension",
@@ -59,27 +68,86 @@ pub async fn run(
             "Top-bar icon, panel placement, clipboard and app switcher work.",
             "Enable \"Andromeda\" in the Extensions app, then log out and back in once.",
         ),
-        c("Audio (PipeWire)", mixer_connected, "Volume mixer available.", "PipeWire is not reachable; the mixer is hidden."),
-        c("AMD / Intel GPU", other_gpu, "Read from the kernel (sysfs).", "No AMD or Intel GPU readings found."),
-        c("NVIDIA GPU", nvidia, "Read through NVML (NVIDIA driver).", "No NVIDIA driver (NVML) found."),
+        c(
+            "Audio (PipeWire)",
+            mixer_connected,
+            "Volume mixer available.",
+            "PipeWire is not reachable; the mixer is hidden.",
+        ),
+        c(
+            "AMD / Intel GPU",
+            other_gpu,
+            "Read from the kernel (sysfs).",
+            "No AMD or Intel GPU readings found.",
+        ),
+        c(
+            "NVIDIA GPU",
+            nvidia,
+            "Read through NVML (NVIDIA driver).",
+            "No NVIDIA driver (NVML) found.",
+        ),
         Check {
             name: "Sensors".into(),
             ok: count(Group::Temps) + count(Group::Fans) > 0,
-            detail: format!("{} temperatures, {} fans.", count(Group::Temps), count(Group::Fans)),
+            detail: format!(
+                "{} temperatures, {} fans.",
+                count(Group::Temps),
+                count(Group::Fans)
+            ),
         },
-        c("Battery", count(Group::Battery) > 0, "Battery and power readings available.", "No battery found (desktop computer?)."),
+        c(
+            "Battery",
+            count(Group::Battery) > 0,
+            "Battery and power readings available.",
+            "No battery found (desktop computer?).",
+        ),
         c(
             "Power profiles",
             has_name(system, "org.freedesktop.UPower.PowerProfiles").await,
             "Power mode can be switched.",
             "Install and enable power-profiles-daemon or tuned-ppd.",
         ),
-        c("Drive health", has_name(system, "org.freedesktop.UDisks2").await, "SMART data via UDisks2.", "UDisks2 is not running."),
-        c("Packages", has_name(system, "org.freedesktop.PackageKit").await || on_path("pkcon"), "Install and remove RPMs.", "PackageKit is not available."),
-        c("Flatpak", on_path("flatpak"), "Install and remove Flatpak apps.", "Install flatpak to manage Flatpak apps."),
-        c("FFmpeg", on_path("ffmpeg"), "File converter and media tools.", "Install ffmpeg to convert audio, video and images."),
-        c("Tesseract", on_path("tesseract"), "Copy text from screen (OCR).", "Install tesseract and tesseract-langpack-eng for OCR."),
-        c("LibreOffice", on_path("soffice") || on_path("libreoffice"), "Office documents to PDF and back.", "Install LibreOffice to convert documents."),
-        c("curl", on_path("curl"), "Network speed test.", "Install curl for the speed test."),
+        c(
+            "Drive health",
+            has_name(system, "org.freedesktop.UDisks2").await,
+            "SMART data via UDisks2.",
+            "UDisks2 is not running.",
+        ),
+        c(
+            "Packages",
+            has_name(system, "org.freedesktop.PackageKit").await || on_path("pkcon"),
+            "Install and remove RPMs.",
+            "PackageKit is not available.",
+        ),
+        c(
+            "Flatpak",
+            on_path("flatpak"),
+            "Install and remove Flatpak apps.",
+            "Install flatpak to manage Flatpak apps.",
+        ),
+        c(
+            "FFmpeg",
+            on_path("ffmpeg"),
+            "File converter and media tools.",
+            "Install ffmpeg to convert audio, video and images.",
+        ),
+        c(
+            "Tesseract",
+            on_path("tesseract"),
+            "Copy text from screen (OCR).",
+            "Install tesseract and tesseract-langpack-eng for OCR.",
+        ),
+        c(
+            "LibreOffice",
+            on_path("soffice") || on_path("libreoffice"),
+            "Office documents to PDF and back.",
+            "Install LibreOffice to convert documents.",
+        ),
+        c(
+            "curl",
+            on_path("curl"),
+            "Network speed test.",
+            "Install curl for the speed test.",
+        ),
     ]
 }

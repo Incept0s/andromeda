@@ -30,12 +30,12 @@ use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use andromeda_core::config::{self, Config};
-use andromeda_core::topbar;
 use andromeda_core::dbus;
 use andromeda_core::info::MixerState;
 use andromeda_core::metrics::MetricInfo;
 use andromeda_core::procs::Procs;
 use andromeda_core::sensors::Sensors;
+use andromeda_core::topbar;
 use tokio::sync::Notify;
 use zbus::object_server::SignalEmitter;
 use zbus::{connection, fdo, interface};
@@ -71,7 +71,9 @@ struct Daemon {
 }
 
 fn unix_now() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }
 
 impl Daemon {
@@ -85,11 +87,20 @@ impl Daemon {
         if self.awake_cookie.is_none() {
             let sm = desktop::SessionManagerProxy::new(&self.session).await?;
             let cookie = sm
-                .inhibit(config_file::APP_ID, 0, "Keep awake is on", desktop::INHIBIT_SUSPEND_AND_IDLE)
+                .inhibit(
+                    config_file::APP_ID,
+                    0,
+                    "Keep awake is on",
+                    desktop::INHIBIT_SUSPEND_AND_IDLE,
+                )
                 .await?;
             self.awake_cookie = Some(cookie);
         }
-        self.awake_until = if minutes == 0 { 0 } else { unix_now() + i64::from(minutes) * 60 };
+        self.awake_until = if minutes == 0 {
+            0
+        } else {
+            unix_now() + i64::from(minutes) * 60
+        };
         Ok(())
     }
 
@@ -113,10 +124,15 @@ impl Daemon {
         let on_ac = self.values.get("power.ac").is_some_and(|v| *v > 0.0);
         let low = self.config.awake.stop_below_battery.is_some_and(|limit| {
             !on_ac
-                && self
-                    .values
-                    .iter()
-                    .any(|(k, v)| k.starts_with("bat.") && k.ends_with(".charge") && self.metrics.iter().any(|m| m.id == k.replace(".charge", ".health")) && *v < f64::from(limit))
+                && self.values.iter().any(|(k, v)| {
+                    k.starts_with("bat.")
+                        && k.ends_with(".charge")
+                        && self
+                            .metrics
+                            .iter()
+                            .any(|m| m.id == k.replace(".charge", ".health"))
+                        && *v < f64::from(limit)
+                })
         });
         if expired || low {
             self.awake_off().await;
@@ -144,13 +160,23 @@ impl Daemon {
     fn metrics(&self) -> Vec<(String, String, String, String)> {
         self.metrics
             .iter()
-            .map(|m| (m.id.clone(), m.name.clone(), m.unit.as_str().into(), m.group.as_str().into()))
+            .map(|m| {
+                (
+                    m.id.clone(),
+                    m.name.clone(),
+                    m.unit.as_str().into(),
+                    m.group.as_str().into(),
+                )
+            })
             .collect()
     }
 
     /// Recent values per metric, oldest first.
     fn history(&self) -> HashMap<String, Vec<f64>> {
-        self.history.iter().map(|(k, v)| (k.clone(), v.iter().copied().collect())).collect()
+        self.history
+            .iter()
+            .map(|(k, v)| (k.clone(), v.iter().copied().collect()))
+            .collect()
     }
 
     /// Top-bar text, e.g. "CPU 42°  RAM 61%  12W"; empty when the feature
@@ -172,8 +198,13 @@ impl Daemon {
     }
 
     /// Replaces the settings. Values are sanitized, then saved to disk.
-    async fn set_config(&mut self, json: &str, #[zbus(signal_emitter)] e: SignalEmitter<'_>) -> fdo::Result<()> {
-        let mut c: Config = serde_json::from_str(json).map_err(|err| fdo::Error::InvalidArgs(err.to_string()))?;
+    async fn set_config(
+        &mut self,
+        json: &str,
+        #[zbus(signal_emitter)] e: SignalEmitter<'_>,
+    ) -> fdo::Result<()> {
+        let mut c: Config =
+            serde_json::from_str(json).map_err(|err| fdo::Error::InvalidArgs(err.to_string()))?;
         c.sanitize();
         config_file::save(&c).map_err(|err| fdo::Error::Failed(err.to_string()))?;
         if !c.features.awake && self.awake_until >= 0 {
@@ -208,7 +239,11 @@ impl Daemon {
 
     /// Sets the system default device; `kind` is "output" or "input".
     fn mixer_default(&self, kind: &str, name: &str) {
-        let cmd = if kind == "input" { mixer::Cmd::DefaultInput(name.into()) } else { mixer::Cmd::DefaultOutput(name.into()) };
+        let cmd = if kind == "input" {
+            mixer::Cmd::DefaultInput(name.into())
+        } else {
+            mixer::Cmd::DefaultOutput(name.into())
+        };
         self.mixer_cmd(cmd);
     }
 
@@ -219,7 +254,11 @@ impl Daemon {
     }
 
     /// Keeps the session awake for `minutes` (0 = until turned off).
-    async fn awake_start(&mut self, minutes: u32, #[zbus(signal_emitter)] e: SignalEmitter<'_>) -> fdo::Result<()> {
+    async fn awake_start(
+        &mut self,
+        minutes: u32,
+        #[zbus(signal_emitter)] e: SignalEmitter<'_>,
+    ) -> fdo::Result<()> {
         self.awake_on(minutes).await?;
         let _ = self.awake_until_changed(&e).await;
         Ok(())
@@ -234,8 +273,12 @@ impl Daemon {
     /// ["power-saver", "balanced", "performance"]). Empty when
     /// power-profiles-daemon is not running.
     async fn power_profile(&self) -> (String, Vec<String>) {
-        let Some(sys) = &self.system else { return Default::default() };
-        let Ok(p) = desktop::PowerProfilesProxy::new(sys).await else { return Default::default() };
+        let Some(sys) = &self.system else {
+            return Default::default();
+        };
+        let Ok(p) = desktop::PowerProfilesProxy::new(sys).await else {
+            return Default::default();
+        };
         let active = p.active_profile().await.unwrap_or_default();
         let list = p
             .profiles()
@@ -248,7 +291,10 @@ impl Daemon {
     }
 
     async fn set_power_profile(&self, profile: &str) -> fdo::Result<()> {
-        let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
+        let sys = self
+            .system
+            .as_ref()
+            .ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
         let p = desktop::PowerProfilesProxy::new(sys).await?;
         p.set_active_profile(profile).await?;
         Ok(())
@@ -274,13 +320,18 @@ impl Daemon {
     /// Apps with open connections, as JSON (`Vec<info::NetApp>`).
     async fn network_apps(&self) -> String {
         // Scanning /proc/*/fd takes a few ms; keep it off the async thread.
-        let apps = tokio::task::spawn_blocking(netinfo::apps).await.unwrap_or_default();
+        let apps = tokio::task::spawn_blocking(netinfo::apps)
+            .await
+            .unwrap_or_default();
         serde_json::to_string(&apps).unwrap_or_default()
     }
 
     /// Drives with SMART data, as JSON (`Vec<info::Drive>`).
     async fn drives(&self) -> fdo::Result<String> {
-        let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
+        let sys = self
+            .system
+            .as_ref()
+            .ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
         let list = drives::list(sys).await?;
         Ok(serde_json::to_string(&list).unwrap_or_default())
     }
@@ -301,7 +352,9 @@ impl Daemon {
         let id = self.next_job;
         let ctx = self.jobs.clone();
         tokio::spawn(async move {
-            let Ok(e) = SignalEmitter::new(&ctx.session, dbus::DAEMON_PATH) else { return };
+            let Ok(e) = SignalEmitter::new(&ctx.session, dbus::DAEMON_PATH) else {
+                return;
+            };
             let (ok, result) = match jobs::run(ctx.clone(), &e, &kind, &args).await {
                 Ok(r) => (true, r),
                 Err(err) => (false, err),
@@ -322,7 +375,13 @@ impl Daemon {
     /// by `query` (case-insensitive; empty = all).
     fn clipboard_list(&self, query: &str) -> String {
         let q = query.to_lowercase();
-        let mut v: Vec<_> = self.clipboard.entries.iter().filter(|e| q.is_empty() || e.text.to_lowercase().contains(&q)).cloned().collect();
+        let mut v: Vec<_> = self
+            .clipboard
+            .entries
+            .iter()
+            .filter(|e| q.is_empty() || e.text.to_lowercase().contains(&q))
+            .cloned()
+            .collect();
         v.sort_by_key(|e| !e.pinned);
         serde_json::to_string(&v).unwrap_or_default()
     }
@@ -380,13 +439,21 @@ impl Daemon {
         if out.status.success() {
             Ok(())
         } else {
-            Err(fdo::Error::Failed("Start at login is only available when Andromeda is installed from its RPM.".into()))
+            Err(fdo::Error::Failed(
+                "Start at login is only available when Andromeda is installed from its RPM.".into(),
+            ))
         }
     }
 
     /// Settings → System check, as JSON (`Vec<info::Check>`).
     async fn system_check(&self) -> String {
-        let list = check::run(&self.session, self.system.as_ref(), &self.metrics, self.mixer.connected).await;
+        let list = check::run(
+            &self.session,
+            self.system.as_ref(),
+            &self.metrics,
+            self.mixer.connected,
+        )
+        .await;
         serde_json::to_string(&list).unwrap_or_default()
     }
 
@@ -449,9 +516,15 @@ async fn main() -> zbus::Result<()> {
         panel_visible: false,
         quit: quit.clone(),
     };
-    session.object_server().at(dbus::DAEMON_PATH, daemon).await?;
+    session
+        .object_server()
+        .at(dbus::DAEMON_PATH, daemon)
+        .await?;
     session.request_name(dbus::DAEMON_NAME).await?;
-    let iface = session.object_server().interface::<_, Daemon>(dbus::DAEMON_PATH).await?;
+    let iface = session
+        .object_server()
+        .interface::<_, Daemon>(dbus::DAEMON_PATH)
+        .await?;
 
     if start_awake {
         let mut d = iface.get_mut().await;
@@ -462,7 +535,9 @@ async fn main() -> zbus::Result<()> {
 
     // Publish every mixer snapshot as soon as the mixer thread sends it.
     let mixer_watch = async {
-        let Some(mut rx) = mixer_rx else { return std::future::pending().await };
+        let Some(mut rx) = mixer_rx else {
+            return std::future::pending().await;
+        };
         while rx.changed().await.is_ok() {
             let state = rx.borrow_and_update().clone();
             let mut d = iface.get_mut().await;
@@ -493,15 +568,28 @@ async fn main() -> zbus::Result<()> {
                 if d.config.features.topbar {
                     watched.extend(config::topbar_or_default(&d.config, &d.metrics));
                 }
-                watched.extend(d.config.alerts.rules.iter().filter(|r| r.enabled).map(|r| r.metric.clone()));
+                watched.extend(
+                    d.config
+                        .alerts
+                        .rules
+                        .iter()
+                        .filter(|r| r.enabled)
+                        .map(|r| r.metric.clone()),
+                );
                 (d.panel_visible, watched)
             };
             let uses = |pred: &dyn Fn(&str) -> bool| watched.iter().any(|w| pred(w));
             let every_10 = ticks % 10 == 1;
-            let slow_now = panel || every_10 || uses(&|w| slow_ids.iter().any(|id| config::pattern_matches(w, id)));
+            let slow_now = panel
+                || every_10
+                || uses(&|w| slow_ids.iter().any(|id| config::pattern_matches(w, id)));
             let mut sample = sensors.sample_with(slow_now);
             if slow_now {
-                last_slow = sample.iter().filter(|(id, _)| slow_ids.contains(id)).cloned().collect();
+                last_slow = sample
+                    .iter()
+                    .filter(|(id, _)| slow_ids.contains(id))
+                    .cloned()
+                    .collect();
             } else {
                 sample.extend(last_slow.iter().cloned());
             }
@@ -525,7 +613,11 @@ async fn main() -> zbus::Result<()> {
             let _ = d.values_changed(iface.signal_emitter()).await;
 
             let bar = if d.config.features.topbar {
-                topbar::text(&config::topbar_or_default(&d.config, &d.metrics), &d.metrics, &d.values)
+                topbar::text(
+                    &config::topbar_or_default(&d.config, &d.metrics),
+                    &d.metrics,
+                    &d.values,
+                )
             } else {
                 String::new()
             };

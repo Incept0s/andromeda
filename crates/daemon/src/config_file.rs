@@ -18,15 +18,22 @@ fn path() -> Option<PathBuf> {
 }
 
 pub fn load() -> Config {
-    let Some(p) = path() else { return Config::default() };
-    let Ok(text) = fs::read_to_string(&p) else { return Config::default() };
+    let Some(p) = path() else {
+        return Config::default();
+    };
+    let Ok(text) = fs::read_to_string(&p) else {
+        return Config::default();
+    };
     match toml::from_str::<Config>(&text) {
         Ok(mut c) => {
             c.sanitize();
             c
         }
         Err(e) => {
-            eprintln!("andromedad: {} is invalid ({e}); keeping it as config.toml.bad", p.display());
+            eprintln!(
+                "andromedad: {} is invalid ({e}); keeping it as config.toml.bad",
+                p.display()
+            );
             let _ = fs::rename(&p, p.with_extension("toml.bad"));
             Config::default()
         }

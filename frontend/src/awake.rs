@@ -14,7 +14,14 @@ struct Minutes {
     minutes: u32,
 }
 
-const CHOICES: [(u32, &str); 6] = [(15, "15 min"), (30, "30 min"), (60, "1 h"), (120, "2 h"), (240, "4 h"), (0, "Until off")];
+const CHOICES: [(u32, &str); 6] = [
+    (15, "15 min"),
+    (30, "30 min"),
+    (60, "1 h"),
+    (120, "2 h"),
+    (240, "4 h"),
+    (0, "Until off"),
+];
 
 #[component]
 pub fn AwakeTab() -> impl IntoView {
@@ -24,7 +31,10 @@ pub fn AwakeTab() -> impl IntoView {
     if let Ok(h) = set_interval_with_handle(move || now.set(now_secs()), Duration::from_secs(1)) {
         on_cleanup(move || h.clear());
     }
-    let default = move || d.config.with(|c| c.as_ref().map_or(60, |c| c.awake.default_minutes));
+    let default = move || {
+        d.config
+            .with(|c| c.as_ref().map_or(60, |c| c.awake.default_minutes))
+    };
     let chosen = RwSignal::new(None::<u32>);
     let minutes = move || chosen.get().unwrap_or_else(default);
     let active = move || d.awake.get() >= 0;
@@ -46,7 +56,8 @@ pub fn AwakeTab() -> impl IntoView {
         }
     };
     let battery_note = move || {
-        d.config.with(|c| c.as_ref().and_then(|c| c.awake.stop_below_battery))
+        d.config
+            .with(|c| c.as_ref().and_then(|c| c.awake.stop_below_battery))
             .map(|b| format!("Stops by itself below {b} % battery when unplugged."))
     };
 

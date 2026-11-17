@@ -11,10 +11,18 @@ use std::path::{Path, PathBuf};
 use andromeda_core::tools::ConvertOption;
 use tokio::process::Command;
 
-const IMAGE: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff", "avif"];
-const AUDIO: &[&str] = &["mp3", "wav", "flac", "ogg", "oga", "m4a", "aac", "opus", "wma"];
-const VIDEO: &[&str] = &["mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv", "flv", "mpg", "mpeg"];
-const DOC: &[&str] = &["docx", "doc", "odt", "rtf", "txt", "pptx", "ppt", "odp", "xlsx", "xls", "ods"];
+const IMAGE: &[&str] = &[
+    "png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff", "avif",
+];
+const AUDIO: &[&str] = &[
+    "mp3", "wav", "flac", "ogg", "oga", "m4a", "aac", "opus", "wma",
+];
+const VIDEO: &[&str] = &[
+    "mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv", "flv", "mpg", "mpeg",
+];
+const DOC: &[&str] = &[
+    "docx", "doc", "odt", "rtf", "txt", "pptx", "ppt", "odp", "xlsx", "xls", "ods",
+];
 
 #[derive(Default)]
 pub struct Tools {
@@ -23,11 +31,14 @@ pub struct Tools {
 }
 
 fn on_path(bin: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(bin).is_file()))
+    std::env::var_os("PATH")
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(bin).is_file()))
 }
 
 fn ext(path: &Path) -> String {
-    path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
+    path.extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
 }
 
 /// `name.ext`, or `name (1).ext`, ... so nothing is ever overwritten.
@@ -44,7 +55,11 @@ fn free_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
 impl Tools {
     async fn encoders(&mut self) -> &HashSet<String> {
         if self.encoders.is_none() {
-            let set = match Command::new("ffmpeg").args(["-hide_banner", "-encoders"]).output().await {
+            let set = match Command::new("ffmpeg")
+                .args(["-hide_banner", "-encoders"])
+                .output()
+                .await
+            {
                 // Lines look like " V....D libx264   H.264 ...": the name is field 2.
                 Ok(o) => String::from_utf8_lossy(&o.stdout)
                     .lines()
@@ -73,7 +88,11 @@ impl Tools {
                 id: id.into(),
                 label: label.into(),
                 note: note.into(),
-                missing: if ok { String::new() } else { format!("Install {need} to enable this") },
+                missing: if ok {
+                    String::new()
+                } else {
+                    format!("Install {need} to enable this")
+                },
             });
         };
         if IMAGE.contains(&e.as_str()) {
@@ -84,10 +103,28 @@ impl Tools {
                 }
             }
             if e != "webp" {
-                opt("webp", "Convert to WebP", "", ffmpeg && webp, "ffmpeg with WebP");
+                opt(
+                    "webp",
+                    "Convert to WebP",
+                    "",
+                    ffmpeg && webp,
+                    "ffmpeg with WebP",
+                );
             }
-            opt("compress", "Compress", "smaller file, slight quality loss", ffmpeg, "ffmpeg");
-            opt("ocr", "Extract text", "copied to the clipboard", on_path("tesseract"), "tesseract");
+            opt(
+                "compress",
+                "Compress",
+                "smaller file, slight quality loss",
+                ffmpeg,
+                "ffmpeg",
+            );
+            opt(
+                "ocr",
+                "Extract text",
+                "copied to the clipboard",
+                on_path("tesseract"),
+                "tesseract",
+            );
         } else if AUDIO.contains(&e.as_str()) {
             for (t, label, enc) in [
                 ("mp3", "MP3", "libmp3lame"),
@@ -104,17 +141,56 @@ impl Tools {
             }
         } else if VIDEO.contains(&e.as_str()) {
             let h264 = self.pick(&["libx264", "libopenh264"]).await.is_some();
-            let webm = self.pick(&["libvpx-vp9", "libsvtav1", "libaom-av1"]).await.is_some();
-            opt("mp4", "Convert to MP4 (H.264)", "", ffmpeg && h264, "ffmpeg with H.264 (RPM Fusion)");
-            opt("webm", "Convert to WebM", "", ffmpeg && webm, "ffmpeg with VP9 or AV1");
-            opt("mkv", "Convert to MKV", "same streams, no quality loss", ffmpeg, "ffmpeg");
-            opt("compress", "Compress video", "max 1080p", ffmpeg && (h264 || webm), "ffmpeg");
+            let webm = self
+                .pick(&["libvpx-vp9", "libsvtav1", "libaom-av1"])
+                .await
+                .is_some();
+            opt(
+                "mp4",
+                "Convert to MP4 (H.264)",
+                "",
+                ffmpeg && h264,
+                "ffmpeg with H.264 (RPM Fusion)",
+            );
+            opt(
+                "webm",
+                "Convert to WebM",
+                "",
+                ffmpeg && webm,
+                "ffmpeg with VP9 or AV1",
+            );
+            opt(
+                "mkv",
+                "Convert to MKV",
+                "same streams, no quality loss",
+                ffmpeg,
+                "ffmpeg",
+            );
+            opt(
+                "compress",
+                "Compress video",
+                "max 1080p",
+                ffmpeg && (h264 || webm),
+                "ffmpeg",
+            );
             opt("gif", "Make a GIF", "first 15 seconds", ffmpeg, "ffmpeg");
-            opt("mp3", "Extract audio (MP3)", "", ffmpeg && self.pick(&["libmp3lame"]).await.is_some(), "ffmpeg");
+            opt(
+                "mp3",
+                "Extract audio (MP3)",
+                "",
+                ffmpeg && self.pick(&["libmp3lame"]).await.is_some(),
+                "ffmpeg",
+            );
         } else if DOC.contains(&e.as_str()) {
             opt("pdf", "Convert to PDF", "", office, "LibreOffice");
         } else if e == "pdf" {
-            opt("docx", "Convert to Word (DOCX)", "best effort; scanned PDFs need OCR first", office, "LibreOffice");
+            opt(
+                "docx",
+                "Convert to Word (DOCX)",
+                "best effort; scanned PDFs need OCR first",
+                office,
+                "LibreOffice",
+            );
         }
         v
     }
@@ -125,7 +201,10 @@ impl Tools {
             return Err("File not found".into());
         }
         let dir = path.parent().ok_or("no folder")?.to_owned();
-        let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "converted".into());
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "converted".into());
         let e = ext(path);
         match target {
             "pdf" | "docx" => return office(path, &dir, &stem, target).await,
@@ -137,11 +216,18 @@ impl Tools {
             match target {
                 "png" => (free_path(&dir, &stem, "png"), vec![]),
                 "jpg" => (free_path(&dir, &stem, "jpg"), s(&["-q:v", "2"])),
-                "webp" => (free_path(&dir, &stem, "webp"), s(&["-c:v", "libwebp", "-quality", "90"])),
-                "compress" if self.pick(&["libwebp"]).await.is_some() => {
-                    (free_path(&dir, &format!("{stem} (compressed)"), "webp"), s(&["-c:v", "libwebp", "-quality", "70"]))
-                }
-                "compress" => (free_path(&dir, &format!("{stem} (compressed)"), "jpg"), s(&["-q:v", "8"])),
+                "webp" => (
+                    free_path(&dir, &stem, "webp"),
+                    s(&["-c:v", "libwebp", "-quality", "90"]),
+                ),
+                "compress" if self.pick(&["libwebp"]).await.is_some() => (
+                    free_path(&dir, &format!("{stem} (compressed)"), "webp"),
+                    s(&["-c:v", "libwebp", "-quality", "70"]),
+                ),
+                "compress" => (
+                    free_path(&dir, &format!("{stem} (compressed)"), "jpg"),
+                    s(&["-q:v", "8"]),
+                ),
                 _ => return Err("Unknown conversion".into()),
             }
         } else if AUDIO.contains(&e.as_str()) || target == "mp3" {
@@ -161,10 +247,24 @@ impl Tools {
             match target {
                 "mkv" => (free_path(&dir, &stem, "mkv"), s(&["-c", "copy"])),
                 "mp4" | "compress" if self.pick(&["libx264", "libopenh264"]).await.is_some() => {
-                    let enc = self.pick(&["libx264", "libopenh264"]).await.unwrap_or("libx264");
+                    let enc = self
+                        .pick(&["libx264", "libopenh264"])
+                        .await
+                        .unwrap_or("libx264");
                     let crf = if target == "compress" { "28" } else { "23" };
-                    let mut a = if enc == "libx264" { s(&["-c:v", "libx264", "-crf", crf, "-preset", "medium"]) } else { s(&["-c:v", enc, "-b:v", "4M"]) };
-                    a.extend(s(&["-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"]));
+                    let mut a = if enc == "libx264" {
+                        s(&["-c:v", "libx264", "-crf", crf, "-preset", "medium"])
+                    } else {
+                        s(&["-c:v", enc, "-b:v", "4M"])
+                    };
+                    a.extend(s(&[
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "160k",
+                        "-movflags",
+                        "+faststart",
+                    ]));
                     if target == "compress" {
                         a.extend(s(&["-vf", "scale='min(1920,iw)':-2"]));
                         (free_path(&dir, &format!("{stem} (compressed)"), "mp4"), a)
@@ -173,7 +273,10 @@ impl Tools {
                     }
                 }
                 "webm" | "compress" => {
-                    let enc = self.pick(&["libvpx-vp9", "libsvtav1", "libaom-av1"]).await.ok_or("No WebM encoder")?;
+                    let enc = self
+                        .pick(&["libvpx-vp9", "libsvtav1", "libaom-av1"])
+                        .await
+                        .ok_or("No WebM encoder")?;
                     let mut a = s(&["-c:v", enc, "-crf", "34", "-b:v", "0", "-c:a", "libopus"]);
                     if target == "compress" {
                         a.extend(s(&["-vf", "scale='min(1920,iw)':-2"]));
@@ -185,7 +288,14 @@ impl Tools {
                 "gif" => (
                     free_path(&dir, &stem, "gif"),
                     // Two-pass palette in one filter graph: much better colors.
-                    s(&["-t", "15", "-vf", "fps=12,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse", "-loop", "0"]),
+                    s(&[
+                        "-t",
+                        "15",
+                        "-vf",
+                        "fps=12,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
+                        "-loop",
+                        "0",
+                    ]),
                 ),
                 _ => return Err("Unknown conversion".into()),
             }
@@ -201,7 +311,11 @@ impl Tools {
             .map_err(|_| "Install ffmpeg to convert media.".to_owned())?;
         if !status.status.success() {
             let _ = std::fs::remove_file(&out);
-            return Err(String::from_utf8_lossy(&status.stderr).lines().last().unwrap_or("Conversion failed").to_owned());
+            return Err(String::from_utf8_lossy(&status.stderr)
+                .lines()
+                .last()
+                .unwrap_or("Conversion failed")
+                .to_owned());
         }
         Ok(out)
     }
@@ -215,18 +329,32 @@ fn s(a: &[&str]) -> Vec<String> {
 /// user has LibreOffice open) and a temporary output folder (it would
 /// silently overwrite files otherwise).
 async fn office(path: &Path, dir: &Path, stem: &str, target: &str) -> Result<PathBuf, String> {
-    let bin = if on_path("soffice") { "soffice" } else { "libreoffice" };
+    let bin = if on_path("soffice") {
+        "soffice"
+    } else {
+        "libreoffice"
+    };
     let tmp = std::env::temp_dir().join(format!("andromeda-office-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp);
     let profile = format!("-env:UserInstallation=file://{}/profile", tmp.display());
     let mut cmd = Command::new(bin);
     cmd.arg(&profile).arg("--headless");
     if target == "docx" {
-        cmd.args(["--infilter=writer_pdf_import", "--convert-to", "docx:MS Word 2007 XML"]);
+        cmd.args([
+            "--infilter=writer_pdf_import",
+            "--convert-to",
+            "docx:MS Word 2007 XML",
+        ]);
     } else {
         cmd.args(["--convert-to", "pdf"]);
     }
-    let out = cmd.arg("--outdir").arg(&tmp).arg(path).output().await.map_err(|_| "Install LibreOffice to convert documents.".to_owned())?;
+    let out = cmd
+        .arg("--outdir")
+        .arg(&tmp)
+        .arg(path)
+        .output()
+        .await
+        .map_err(|_| "Install LibreOffice to convert documents.".to_owned())?;
     let produced = tmp.join(format!("{stem}.{target}"));
     if !out.status.success() || !produced.exists() {
         return Err("LibreOffice could not convert this file.".into());

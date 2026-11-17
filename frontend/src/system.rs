@@ -3,7 +3,9 @@
 //! all other sensors, uptime. Layout follows the reference panel.
 //! Rows only render for metrics this machine actually has.
 
-use andromeda_core::metrics::{Group, Pressure, Unit, format, format_bytes, format_duration, pressure_level};
+use andromeda_core::metrics::{
+    Group, Pressure, Unit, format, format_bytes, format_duration, pressure_level,
+};
 use leptos::prelude::*;
 
 use crate::widgets::{Bar, KeyValue, Spark, data, fmt, kv};
@@ -13,7 +15,9 @@ fn gpus() -> Vec<(String, String)> {
     data().metrics.with(|ms| {
         let mut v: Vec<(String, String)> = Vec::new();
         for m in ms.iter().filter(|m| m.group == Group::Gpu) {
-            let Some((prefix, kind)) = m.id.rsplit_once('.') else { continue };
+            let Some((prefix, kind)) = m.id.rsplit_once('.') else {
+                continue;
+            };
             let name = match kind {
                 "usage" => m.name.clone(),
                 "temp" => m.name.trim_end_matches(" temperature").to_owned(),
@@ -74,7 +78,9 @@ fn Tile(label: String, id: String) -> impl IntoView {
 
 #[component]
 fn CpuDetails() -> impl IntoView {
-    let cores = data().metrics.with(|ms| ms.iter().filter(|m| m.id.starts_with("cpu.core")).count());
+    let cores = data()
+        .metrics
+        .with(|ms| ms.iter().filter(|m| m.id.starts_with("cpu.core")).count());
     view! {
         <div class="cores">
             {(0..cores).map(|i| {
@@ -93,7 +99,10 @@ fn GpuDetails(prefix: String) -> impl IntoView {
     let p = prefix.clone();
     let vram = move || {
         let d = data();
-        match (d.value(&format!("{p}.vram_used")), d.value(&format!("{p}.vram_total"))) {
+        match (
+            d.value(&format!("{p}.vram_used")),
+            d.value(&format!("{p}.vram_total")),
+        ) {
             (Some(u), Some(t)) => format!("{} / {}", format_bytes(u), format_bytes(t)),
             (Some(u), None) => format_bytes(u),
             _ => "–".into(),
@@ -117,7 +126,9 @@ fn BatteryDetails(prefix: String) -> impl IntoView {
         let d = data();
         let watts = d.value(&format!("{p}.power")).unwrap_or(0.0);
         match d.value("power.ac") {
-            Some(ac) if ac > 0.0 && watts > 0.05 => format!("Charging, {}", format(watts, Unit::Watts)),
+            Some(ac) if ac > 0.0 && watts > 0.05 => {
+                format!("Charging, {}", format(watts, Unit::Watts))
+            }
             Some(ac) if ac > 0.0 => "Plugged in".into(),
             _ if watts > 0.05 => format!("On battery, {}", format(watts, Unit::Watts)),
             _ => "On battery".into(),

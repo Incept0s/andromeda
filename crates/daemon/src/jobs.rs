@@ -29,16 +29,29 @@ pub async fn set_clipboard(e: &SignalEmitter<'_>, text: &str, mime: &str) {
 }
 
 fn system(ctx: &Ctx) -> Result<&zbus::Connection, String> {
-    ctx.system.as_ref().ok_or_else(|| "The system bus is not available.".to_owned())
+    ctx.system
+        .as_ref()
+        .ok_or_else(|| "The system bus is not available.".to_owned())
 }
 
 /// Runs one job; Ok(result) is text or JSON depending on the kind.
-pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[String]) -> Result<String, String> {
-    let arg = |i: usize| args.get(i).map(String::as_str).ok_or_else(|| format!("{kind}: missing argument"));
+pub async fn run(
+    ctx: Arc<Ctx>,
+    e: &SignalEmitter<'_>,
+    kind: &str,
+    args: &[String],
+) -> Result<String, String> {
+    let arg = |i: usize| {
+        args.get(i)
+            .map(String::as_str)
+            .ok_or_else(|| format!("{kind}: missing argument"))
+    };
     let json = |v: &dyn erased::Json| v.json();
     match kind {
         "speed_test" => json(&netinfo::speed_test().await?),
-        "eject" => drives::eject(system(&ctx)?, arg(0)?).await.map(|_| String::new()),
+        "eject" => drives::eject(system(&ctx)?, arg(0)?)
+            .await
+            .map(|_| String::new()),
         "ocr" => {
             // The panel is hidden by now, so failures are told by notification.
             let notify_err = |e: String| async {
@@ -83,9 +96,10 @@ pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[Strin
         "clean_scan" => {
             let flatpaks = packages::flatpak_installed().await;
             let c = ctx.clone();
-            let items = tokio::task::spawn_blocking(move || c.cleaner.blocking_lock().scan(&flatpaks))
-                .await
-                .map_err(|e| e.to_string())?;
+            let items =
+                tokio::task::spawn_blocking(move || c.cleaner.blocking_lock().scan(&flatpaks))
+                    .await
+                    .map_err(|e| e.to_string())?;
             json(&items)
         }
         "clean_run" => {
@@ -116,7 +130,11 @@ pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[Strin
             json(&all)
         }
         "pkg_update_all" => {
-            let rpms: Vec<String> = packages::rpm_updates(system(&ctx)?).await?.into_iter().map(|p| p.id).collect();
+            let rpms: Vec<String> = packages::rpm_updates(system(&ctx)?)
+                .await?
+                .into_iter()
+                .map(|p| p.id)
+                .collect();
             if !rpms.is_empty() {
                 packages::update_rpms(system(&ctx)?, &rpms).await?;
             }
@@ -126,7 +144,12 @@ pub async fn run(ctx: Arc<Ctx>, e: &SignalEmitter<'_>, kind: &str, args: &[Strin
         "shelf_copy" => {
             // GNOME Files understands this format: "copy" then file URIs.
             let uris: Vec<String> = args.iter().map(|p| format!("file://{p}")).collect();
-            set_clipboard(e, &format!("copy\n{}", uris.join("\n")), "x-special/gnome-copied-files").await;
+            set_clipboard(
+                e,
+                &format!("copy\n{}", uris.join("\n")),
+                "x-special/gnome-copied-files",
+            )
+            .await;
             Ok(String::new())
         }
         "copy_text" => {

@@ -55,7 +55,13 @@ impl Clipboard {
             .truncate(true)
             .mode(0o600)
             .open(&tmp)
-            .and_then(|mut f| f.write_all(serde_json::to_string(&self.entries).unwrap_or_default().as_bytes()));
+            .and_then(|mut f| {
+                f.write_all(
+                    serde_json::to_string(&self.entries)
+                        .unwrap_or_default()
+                        .as_bytes(),
+                )
+            });
         if ok.is_ok() {
             let _ = fs::rename(tmp, dir.join("clipboard.json"));
         }
@@ -71,7 +77,15 @@ impl Clipboard {
             e.time = now;
             self.entries.insert(0, e);
         } else {
-            self.entries.insert(0, ClipEntry { id: self.next_id, text: text.to_owned(), pinned: false, time: now });
+            self.entries.insert(
+                0,
+                ClipEntry {
+                    id: self.next_id,
+                    text: text.to_owned(),
+                    pinned: false,
+                    time: now,
+                },
+            );
             self.next_id += 1;
         }
         // Drop the oldest unpinned entries beyond the limit.
@@ -88,7 +102,10 @@ impl Clipboard {
     }
 
     pub fn text(&self, id: u64) -> Option<String> {
-        self.entries.iter().find(|e| e.id == id).map(|e| e.text.clone())
+        self.entries
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| e.text.clone())
     }
 
     pub fn pin(&mut self, id: u64, pinned: bool) {
@@ -118,13 +135,18 @@ pub struct Shelf {
 impl Shelf {
     pub fn add(&mut self, path: &str) -> bool {
         let p = std::path::Path::new(path);
-        let Ok(meta) = fs::metadata(p) else { return false };
+        let Ok(meta) = fs::metadata(p) else {
+            return false;
+        };
         if !p.is_absolute() || self.items.iter().any(|i| i.path == path) {
             return false;
         }
         self.items.push(ShelfItem {
             path: path.to_owned(),
-            name: p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_owned()),
+            name: p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_owned()),
             is_dir: meta.is_dir(),
             size: meta.len() as f64,
         });
@@ -144,18 +166,32 @@ mod tests {
     fn dedupes_limits_and_keeps_pins() {
         let mut c = Clipboard::default();
         // Point saving at a temp dir so tests never touch the real history.
-        unsafe { std::env::set_var("XDG_DATA_HOME", std::env::temp_dir().join(format!("andromeda-clip-{}", std::process::id()))) };
+        unsafe {
+            std::env::set_var(
+                "XDG_DATA_HOME",
+                std::env::temp_dir().join(format!("andromeda-clip-{}", std::process::id())),
+            )
+        };
         assert!(c.add("a", 1));
         assert!(c.add("b", 2));
         assert!(c.add("a", 3));
-        assert_eq!(c.entries.iter().map(|e| e.text.as_str()).collect::<Vec<_>>(), ["a", "b"]);
+        assert_eq!(
+            c.entries
+                .iter()
+                .map(|e| e.text.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b"]
+        );
         assert!(!c.add("   ", 4));
         let id_b = c.entries[1].id;
         c.pin(id_b, true);
         for i in 0..(MAX_ENTRIES + 10) {
             c.add(&format!("x{i}"), 10);
         }
-        assert!(c.entries.iter().any(|e| e.text == "b"), "pinned entry survives the limit");
+        assert!(
+            c.entries.iter().any(|e| e.text == "b"),
+            "pinned entry survives the limit"
+        );
         assert_eq!(c.entries.iter().filter(|e| !e.pinned).count(), MAX_ENTRIES);
         c.clear();
         assert_eq!(c.entries.len(), 1);

@@ -36,13 +36,15 @@ jobs:
         env:
           PATH: /github/home/.cargo/bin:/usr/local/bin:/usr/bin:/bin
 
-      - name: Test
-        run: cargo test --locked --workspace --exclude andromeda-frontend
-
+      # The RPM build runs trunk first; the UI crate embeds frontend/dist at
+      # compile time, so tests come after it.
       - name: Build RPM
         run: scripts/build-rpm.sh
         env:
           PATH: /github/home/.cargo/bin:/usr/local/bin:/usr/bin:/bin
+
+      - name: Test
+        run: cargo test --locked --workspace --exclude andromeda-frontend
 
       - uses: softprops/action-gh-release@v2
         with:

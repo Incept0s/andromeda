@@ -120,7 +120,11 @@ pub struct Mixer {
 
 impl Default for Mixer {
     fn default() -> Self {
-        Self { max_volume: 153, hidden: Vec::new(), headphones_disconnect_volume: None }
+        Self {
+            max_volume: 153,
+            hidden: Vec::new(),
+            headphones_disconnect_volume: None,
+        }
     }
 }
 
@@ -136,7 +140,11 @@ pub struct Awake {
 
 impl Default for Awake {
     fn default() -> Self {
-        Self { default_minutes: 60, stop_below_battery: Some(20), start_with_app: false }
+        Self {
+            default_minutes: 60,
+            stop_below_battery: Some(20),
+            start_with_app: false,
+        }
     }
 }
 
@@ -154,7 +162,9 @@ impl Config {
         }
         self.awake.default_minutes = self.awake.default_minutes.min(24 * 60);
         self.alerts.cooldown_minutes = self.alerts.cooldown_minutes.clamp(1, 24 * 60);
-        self.alerts.rules.retain(|r| r.threshold.is_finite() && !r.metric.is_empty());
+        self.alerts
+            .rules
+            .retain(|r| r.threshold.is_finite() && !r.metric.is_empty());
         if let Some(t) = &mut self.topbar {
             let mut seen = std::collections::HashSet::new();
             t.retain(|id| seen.insert(id.clone()));
@@ -169,9 +179,17 @@ pub fn topbar_or_default(c: &Config, metrics: &[crate::metrics::MetricInfo]) -> 
         return t.clone();
     }
     let has = |id: &str| metrics.iter().any(|m| m.id == id);
-    let mut v: Vec<String> = ["cpu.temp", "mem.used_pct"].into_iter().filter(|id| has(id)).map(String::from).collect();
+    let mut v: Vec<String> = ["cpu.temp", "mem.used_pct"]
+        .into_iter()
+        .filter(|id| has(id))
+        .map(String::from)
+        .collect();
     // The laptop battery is the one with a health metric (not a mouse).
-    if let Some(m) = metrics.iter().find(|m| m.id.ends_with(".power") && m.id.starts_with("bat.") && has(&m.id.replace(".power", ".health"))) {
+    if let Some(m) = metrics.iter().find(|m| {
+        m.id.ends_with(".power")
+            && m.id.starts_with("bat.")
+            && has(&m.id.replace(".power", ".health"))
+    }) {
         v.push(m.id.clone());
     }
     v
@@ -208,7 +226,12 @@ mod tests {
         c.mixer.max_volume = 900;
         c.awake.stop_below_battery = Some(0);
         c.topbar = Some(vec!["a".into(), "b".into(), "a".into()]);
-        c.alerts.rules.push(AlertRule { metric: "x".into(), direction: Direction::Above, threshold: f64::NAN, enabled: true });
+        c.alerts.rules.push(AlertRule {
+            metric: "x".into(),
+            direction: Direction::Above,
+            threshold: f64::NAN,
+            enabled: true,
+        });
         c.sanitize();
         assert_eq!(c.mixer.max_volume, 200);
         assert_eq!(c.awake.stop_below_battery, Some(1));

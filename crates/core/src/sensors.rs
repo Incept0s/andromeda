@@ -85,7 +85,9 @@ fn entries(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn file_name(p: &Path) -> String {
-    p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    p.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Files in `dir` named `<prefix><n><suffix>`, as (n, path), sorted by n.
@@ -94,7 +96,11 @@ fn numbered(dir: &Path, prefix: &str, suffix: &str) -> Vec<(u32, PathBuf)> {
         .into_iter()
         .filter_map(|p| {
             let name = file_name(&p);
-            let n = name.strip_prefix(prefix)?.strip_suffix(suffix)?.parse().ok()?;
+            let n = name
+                .strip_prefix(prefix)?
+                .strip_suffix(suffix)?
+                .parse()
+                .ok()?;
             Some((n, p))
         })
         .collect();
@@ -139,7 +145,9 @@ fn gpu_name(pci_ids: Option<&str>, vendor: &str, device: &str) -> String {
         "10de" => "NVIDIA GPU",
         _ => "GPU",
     };
-    let Some(db) = pci_ids else { return fallback.into() };
+    let Some(db) = pci_ids else {
+        return fallback.into();
+    };
     let mut in_vendor = false;
     for line in db.lines() {
         // Comments appear inside vendor blocks; they must not end the block.
@@ -191,7 +199,12 @@ impl Sensors {
         s.discover_network(sys);
         s.discover_disks(sys);
         if proc_.join("uptime").exists() {
-            s.metrics.push(MetricInfo::new("sys.uptime", "Uptime", Unit::Seconds, Group::System));
+            s.metrics.push(MetricInfo::new(
+                "sys.uptime",
+                "Uptime",
+                Unit::Seconds,
+                Group::System,
+            ));
         }
         s
     }
@@ -204,19 +217,36 @@ impl Sensors {
         // Only offer what can be read right now.
         if read_f64(&path).is_some() {
             let slow = matches!(info.group, Group::Temps | Group::Fans);
-            self.files.push(FileMetric { id: info.id.clone(), path, scale, slow });
+            self.files.push(FileMetric {
+                id: info.id.clone(),
+                path,
+                scale,
+                slow,
+            });
             self.metrics.push(info);
         }
     }
 
     fn discover_cpu(&mut self, sys: &Path) {
-        let Some(stat) = read_str(&self.proc_.join("stat")) else { return };
+        let Some(stat) = read_str(&self.proc_.join("stat")) else {
+            return;
+        };
         if cpu::parse_proc_stat(&stat).is_none() {
             return;
         }
-        self.metrics.push(MetricInfo::new("cpu.usage", "CPU", Unit::Percent, Group::Cpu));
+        self.metrics.push(MetricInfo::new(
+            "cpu.usage",
+            "CPU",
+            Unit::Percent,
+            Group::Cpu,
+        ));
         for i in 0..cpu::parse_cores(&stat).len() {
-            self.metrics.push(MetricInfo::new(format!("cpu.core{i}"), format!("Core {i}"), Unit::Percent, Group::Cpu));
+            self.metrics.push(MetricInfo::new(
+                format!("cpu.core{i}"),
+                format!("Core {i}"),
+                Unit::Percent,
+                Group::Cpu,
+            ));
         }
         self.cpufreq = entries(&sys.join("devices/system/cpu"))
             .into_iter()
@@ -224,7 +254,12 @@ impl Sensors {
             .filter(|p| p.exists())
             .collect();
         if !self.cpufreq.is_empty() {
-            self.metrics.push(MetricInfo::new("cpu.freq", "CPU clock", Unit::Hertz, Group::Cpu));
+            self.metrics.push(MetricInfo::new(
+                "cpu.freq",
+                "CPU clock",
+                Unit::Hertz,
+                Group::Cpu,
+            ));
         }
     }
 
@@ -240,11 +275,22 @@ impl Sensors {
             ("mem.swap_used", "Swap used"),
             ("mem.swap_total", "Swap total"),
         ] {
-            self.metrics.push(MetricInfo::new(id, name, Unit::Bytes, Group::Memory));
+            self.metrics
+                .push(MetricInfo::new(id, name, Unit::Bytes, Group::Memory));
         }
-        self.metrics.push(MetricInfo::new("mem.used_pct", "Memory used", Unit::Percent, Group::Memory));
+        self.metrics.push(MetricInfo::new(
+            "mem.used_pct",
+            "Memory used",
+            Unit::Percent,
+            Group::Memory,
+        ));
         if self.has_psi {
-            self.metrics.push(MetricInfo::new("mem.pressure", "Memory pressure", Unit::Percent, Group::Memory));
+            self.metrics.push(MetricInfo::new(
+                "mem.pressure",
+                "Memory pressure",
+                Unit::Percent,
+                Group::Memory,
+            ));
         }
         // Fedora swaps to zram (compressed RAM) by default.
         self.zram = entries(&sys.join("block"))
@@ -254,22 +300,34 @@ impl Sensors {
             .filter(|p| p.exists())
             .collect();
         if !self.zram.is_empty() {
-            self.metrics.push(MetricInfo::new("mem.compressed", "Compressed (zram)", Unit::Bytes, Group::Memory));
+            self.metrics.push(MetricInfo::new(
+                "mem.compressed",
+                "Compressed (zram)",
+                Unit::Bytes,
+                Group::Memory,
+            ));
         }
     }
 
     /// AMD and Intel GPUs from DRM sysfs. NVIDIA comes from NVML instead.
     fn discover_gpus(&mut self, sys: &Path) {
         // pci.ids is not guaranteed to be valid UTF-8, so read it lossily.
-        let pci_ids = fs::read("/usr/share/hwdata/pci.ids").ok().map(|b| String::from_utf8_lossy(&b).into_owned());
+        let pci_ids = fs::read("/usr/share/hwdata/pci.ids")
+            .ok()
+            .map(|b| String::from_utf8_lossy(&b).into_owned());
         for card in entries(&sys.join("class/drm")) {
             let cname = file_name(&card);
             // card0, card1 ... but not connectors like card1-eDP-1.
-            if !cname.strip_prefix("card").is_some_and(|n| n.parse::<u32>().is_ok()) {
+            if !cname
+                .strip_prefix("card")
+                .is_some_and(|n| n.parse::<u32>().is_ok())
+            {
                 continue;
             }
             let dev = card.join("device");
-            let (Some(vendor), Some(device)) = (read_str(&dev.join("vendor")), read_str(&dev.join("device"))) else {
+            let (Some(vendor), Some(device)) =
+                (read_str(&dev.join("vendor")), read_str(&dev.join("device")))
+            else {
                 continue;
             };
             if vendor == "0x10de" {
@@ -277,15 +335,67 @@ impl Sensors {
             }
             let name = gpu_name(pci_ids.as_deref(), &vendor, &device);
             let id = |m: &str| format!("gpu.{cname}.{m}");
-            self.add_file(MetricInfo::new(id("usage"), name.clone(), Unit::Percent, Group::Gpu), dev.join("gpu_busy_percent"), 1.0);
-            self.add_file(MetricInfo::new(id("vram_used"), format!("{name} memory used"), Unit::Bytes, Group::Gpu), dev.join("mem_info_vram_used"), 1.0);
-            self.add_file(MetricInfo::new(id("vram_total"), format!("{name} memory total"), Unit::Bytes, Group::Gpu), dev.join("mem_info_vram_total"), 1.0);
+            self.add_file(
+                MetricInfo::new(id("usage"), name.clone(), Unit::Percent, Group::Gpu),
+                dev.join("gpu_busy_percent"),
+                1.0,
+            );
+            self.add_file(
+                MetricInfo::new(
+                    id("vram_used"),
+                    format!("{name} memory used"),
+                    Unit::Bytes,
+                    Group::Gpu,
+                ),
+                dev.join("mem_info_vram_used"),
+                1.0,
+            );
+            self.add_file(
+                MetricInfo::new(
+                    id("vram_total"),
+                    format!("{name} memory total"),
+                    Unit::Bytes,
+                    Group::Gpu,
+                ),
+                dev.join("mem_info_vram_total"),
+                1.0,
+            );
             if let Some(hw) = entries(&dev.join("hwmon")).into_iter().next() {
-                self.add_file(MetricInfo::new(id("temp"), format!("{name} temperature"), Unit::Celsius, Group::Gpu), hw.join("temp1_input"), 1e-3);
-                self.add_file(MetricInfo::new(id("clock"), format!("{name} clock"), Unit::Hertz, Group::Gpu), hw.join("freq1_input"), 1.0);
-                let power = ["power1_average", "power1_input"].map(|f| hw.join(f)).into_iter().find(|p| p.exists());
+                self.add_file(
+                    MetricInfo::new(
+                        id("temp"),
+                        format!("{name} temperature"),
+                        Unit::Celsius,
+                        Group::Gpu,
+                    ),
+                    hw.join("temp1_input"),
+                    1e-3,
+                );
+                self.add_file(
+                    MetricInfo::new(
+                        id("clock"),
+                        format!("{name} clock"),
+                        Unit::Hertz,
+                        Group::Gpu,
+                    ),
+                    hw.join("freq1_input"),
+                    1.0,
+                );
+                let power = ["power1_average", "power1_input"]
+                    .map(|f| hw.join(f))
+                    .into_iter()
+                    .find(|p| p.exists());
                 if let Some(p) = power {
-                    self.add_file(MetricInfo::new(id("power"), format!("{name} power"), Unit::Watts, Group::Gpu), p, 1e-6);
+                    self.add_file(
+                        MetricInfo::new(
+                            id("power"),
+                            format!("{name} power"),
+                            Unit::Watts,
+                            Group::Gpu,
+                        ),
+                        p,
+                        1e-6,
+                    );
                 }
             }
         }
@@ -297,13 +407,17 @@ impl Sensors {
         // Several chips of one kind (two SSDs, two RAM sticks) get numbered.
         let mut seen: std::collections::HashMap<String, u32> = Default::default();
         for chip in entries(&sys.join("class/hwmon")) {
-            let Some(name) = read_str(&chip.join("name")) else { continue };
+            let Some(name) = read_str(&chip.join("name")) else {
+                continue;
+            };
             if name == "amdgpu" || name == "i915" || name == "xe" || name == "nouveau" {
                 continue;
             }
             // Stable key: chip name plus the device it belongs to. hwmonN
             // numbers change between boots, so they never appear in ids.
-            let dev = fs::read_link(chip.join("device")).ok().map(|p| file_name(&p));
+            let dev = fs::read_link(chip.join("device"))
+                .ok()
+                .map(|p| file_name(&p));
             let key = match &dev {
                 Some(d) => format!("{name}@{d}"),
                 None => name.clone(),
@@ -312,7 +426,11 @@ impl Sensors {
             let base = friendly_chip(&name).unwrap_or(&name).to_owned();
             let count = seen.entry(base.clone()).or_default();
             *count += 1;
-            let base = if *count > 1 { format!("{base} {count}") } else { base };
+            let base = if *count > 1 {
+                format!("{base} {count}")
+            } else {
+                base
+            };
 
             let temps: Vec<(u32, String)> = numbered(&chip, "temp", "_input")
                 .into_iter()
@@ -321,11 +439,21 @@ impl Sensors {
             let cpu_n = cpu_temp_label(&name, &temps);
             for (n, l) in &temps {
                 let path = chip.join(format!("temp{n}_input"));
-                let shown = if l.is_empty() || temps.len() == 1 { base.clone() } else { format!("{base} {l}") };
-                let info = if Some(*n) == cpu_n && !self.metrics.iter().any(|m| m.id == "cpu.temp") {
+                let shown = if l.is_empty() || temps.len() == 1 {
+                    base.clone()
+                } else {
+                    format!("{base} {l}")
+                };
+                let info = if Some(*n) == cpu_n && !self.metrics.iter().any(|m| m.id == "cpu.temp")
+                {
                     MetricInfo::new("cpu.temp", "CPU temperature", Unit::Celsius, Group::Cpu)
                 } else {
-                    MetricInfo::new(format!("temp.{key}.{n}"), shown, Unit::Celsius, Group::Temps)
+                    MetricInfo::new(
+                        format!("temp.{key}.{n}"),
+                        shown,
+                        Unit::Celsius,
+                        Group::Temps,
+                    )
                 };
                 self.add_file(info, path, 1e-3);
             }
@@ -334,7 +462,11 @@ impl Sensors {
                     Some(l) => l.replace('_', " "),
                     None => base.clone(),
                 };
-                self.add_file(MetricInfo::new(format!("fan.{key}.{n}"), shown, Unit::Rpm, Group::Fans), path, 1.0);
+                self.add_file(
+                    MetricInfo::new(format!("fan.{key}.{n}"), shown, Unit::Rpm, Group::Fans),
+                    path,
+                    1.0,
+                );
             }
         }
     }
@@ -344,28 +476,63 @@ impl Sensors {
             let name = file_name(&ps);
             match read_str(&ps.join("type")).as_deref() {
                 Some("Mains") => {
-                    self.add_file(MetricInfo::new("power.ac", "AC adapter", Unit::Flag, Group::Battery), ps.join("online"), 1.0);
+                    self.add_file(
+                        MetricInfo::new("power.ac", "AC adapter", Unit::Flag, Group::Battery),
+                        ps.join("online"),
+                        1.0,
+                    );
                 }
                 // Peripherals (mouse, headset) report scope=Device.
                 Some("Battery") if read_str(&ps.join("scope")).as_deref() == Some("Device") => {
                     let model = read_str(&ps.join("model_name")).unwrap_or(name.clone());
-                    self.add_file(MetricInfo::new(format!("bat.{name}.charge"), model, Unit::Percent, Group::Battery), ps.join("capacity"), 1.0);
+                    self.add_file(
+                        MetricInfo::new(
+                            format!("bat.{name}.charge"),
+                            model,
+                            Unit::Percent,
+                            Group::Battery,
+                        ),
+                        ps.join("capacity"),
+                        1.0,
+                    );
                 }
                 Some("Battery") => {
                     let id = |m: &str| format!("bat.{name}.{m}");
                     if read_f64(&ps.join("capacity")).is_none() {
                         continue;
                     }
-                    self.metrics.push(MetricInfo::new(id("charge"), "Battery", Unit::Percent, Group::Battery));
-                    self.metrics.push(MetricInfo::new(id("health"), "Battery health", Unit::Percent, Group::Battery));
-                    self.metrics.push(MetricInfo::new(id("power"), "Battery power", Unit::Watts, Group::Battery));
-                    self.add_file(MetricInfo::new(id("cycles"), "Charge cycles", Unit::Flag, Group::Battery), ps.join("cycle_count"), 1.0);
+                    self.metrics.push(MetricInfo::new(
+                        id("charge"),
+                        "Battery",
+                        Unit::Percent,
+                        Group::Battery,
+                    ));
+                    self.metrics.push(MetricInfo::new(
+                        id("health"),
+                        "Battery health",
+                        Unit::Percent,
+                        Group::Battery,
+                    ));
+                    self.metrics.push(MetricInfo::new(
+                        id("power"),
+                        "Battery power",
+                        Unit::Watts,
+                        Group::Battery,
+                    ));
+                    self.add_file(
+                        MetricInfo::new(id("cycles"), "Charge cycles", Unit::Flag, Group::Battery),
+                        ps.join("cycle_count"),
+                        1.0,
+                    );
                     // A cycle count of 0 means "not reported" (e.g. ASUS), not "new".
                     if read_f64(&ps.join("cycle_count")) == Some(0.0) {
                         self.files.retain(|f| f.id != id("cycles"));
                         self.metrics.retain(|m| m.id != id("cycles"));
                     }
-                    self.batteries.push(Battery { id: format!("bat.{name}"), dir: ps });
+                    self.batteries.push(Battery {
+                        id: format!("bat.{name}"),
+                        dir: ps,
+                    });
                 }
                 _ => {}
             }
@@ -373,7 +540,9 @@ impl Sensors {
     }
 
     fn discover_network(&mut self, sys: &Path) {
-        let Some(text) = read_str(&self.proc_.join("net/dev")) else { return };
+        let Some(text) = read_str(&self.proc_.join("net/dev")) else {
+            return;
+        };
         let ifaces = parse_net_dev(&text);
         if ifaces.is_empty() {
             return;
@@ -383,8 +552,18 @@ impl Sensors {
                 continue;
             }
             let key = name.replace('.', "_");
-            self.metrics.push(MetricInfo::new(format!("net.{key}.rx"), format!("{name} download"), Unit::BytesPerSecond, Group::Network));
-            self.metrics.push(MetricInfo::new(format!("net.{key}.tx"), format!("{name} upload"), Unit::BytesPerSecond, Group::Network));
+            self.metrics.push(MetricInfo::new(
+                format!("net.{key}.rx"),
+                format!("{name} download"),
+                Unit::BytesPerSecond,
+                Group::Network,
+            ));
+            self.metrics.push(MetricInfo::new(
+                format!("net.{key}.tx"),
+                format!("{name} upload"),
+                Unit::BytesPerSecond,
+                Group::Network,
+            ));
             if sys.join("class/net").join(name).join("device").exists() {
                 self.physical_nets.push(name.clone());
             }
@@ -395,7 +574,8 @@ impl Sensors {
             ("net.rx_session", "Downloaded this session", Unit::Bytes),
             ("net.tx_session", "Uploaded this session", Unit::Bytes),
         ] {
-            self.metrics.push(MetricInfo::new(id, name, unit, Group::Network));
+            self.metrics
+                .push(MetricInfo::new(id, name, unit, Group::Network));
         }
         self.net_start = ifaces.into_iter().collect();
     }
@@ -409,27 +589,59 @@ impl Sensors {
                 }
                 let key = m.0.replace('.', "_");
                 let name = mount_name(&m.1);
-                self.metrics.push(MetricInfo::new(format!("disk.{key}.used"), format!("{name} used"), Unit::Bytes, Group::Disk));
-                self.metrics.push(MetricInfo::new(format!("disk.{key}.total"), format!("{name} size"), Unit::Bytes, Group::Disk));
-                self.metrics.push(MetricInfo::new(format!("disk.{key}.free_pct"), format!("{name} free"), Unit::Percent, Group::Disk));
+                self.metrics.push(MetricInfo::new(
+                    format!("disk.{key}.used"),
+                    format!("{name} used"),
+                    Unit::Bytes,
+                    Group::Disk,
+                ));
+                self.metrics.push(MetricInfo::new(
+                    format!("disk.{key}.total"),
+                    format!("{name} size"),
+                    Unit::Bytes,
+                    Group::Disk,
+                ));
+                self.metrics.push(MetricInfo::new(
+                    format!("disk.{key}.free_pct"),
+                    format!("{name} free"),
+                    Unit::Percent,
+                    Group::Disk,
+                ));
                 self.mounts.push(Mount { key, path: m.1 });
             }
         }
         // Whole disks for I/O speed: /sys/block minus virtual devices.
         for d in entries(&sys.join("block")) {
             let name = file_name(&d);
-            if ["loop", "ram", "zram", "dm-", "sr"].iter().any(|p| name.starts_with(p)) {
+            if ["loop", "ram", "zram", "dm-", "sr"]
+                .iter()
+                .any(|p| name.starts_with(p))
+            {
                 continue;
             }
-            self.metrics.push(MetricInfo::new(format!("disk.{name}.read"), format!("{name} read"), Unit::BytesPerSecond, Group::Disk));
-            self.metrics.push(MetricInfo::new(format!("disk.{name}.write"), format!("{name} write"), Unit::BytesPerSecond, Group::Disk));
+            self.metrics.push(MetricInfo::new(
+                format!("disk.{name}.read"),
+                format!("{name} read"),
+                Unit::BytesPerSecond,
+                Group::Disk,
+            ));
+            self.metrics.push(MetricInfo::new(
+                format!("disk.{name}.write"),
+                format!("{name} write"),
+                Unit::BytesPerSecond,
+                Group::Disk,
+            ));
             self.disks.push(name);
         }
     }
 
     /// Ids of the slow secondary sensors (see `FileMetric::slow`).
     pub fn slow_ids(&self) -> Vec<String> {
-        self.files.iter().filter(|f| f.slow).map(|f| f.id.clone()).collect()
+        self.files
+            .iter()
+            .filter(|f| f.slow)
+            .map(|f| f.id.clone())
+            .collect()
     }
 
     /// Reads every discovered metric once, or everything except the slow
@@ -442,7 +654,10 @@ impl Sensors {
     pub fn sample_with(&mut self, slow: bool) -> Vec<(String, f64)> {
         let mut out = Vec::with_capacity(self.metrics.len());
         let now = Instant::now();
-        let elapsed = self.last.map(|t| now.duration_since(t).as_secs_f64()).filter(|e| *e > 0.0);
+        let elapsed = self
+            .last
+            .map(|t| now.duration_since(t).as_secs_f64())
+            .filter(|e| *e > 0.0);
         self.last = Some(now);
         let rate = |cur: u64, prev: u64| elapsed.map(|e| cur.saturating_sub(prev) as f64 / e);
 
@@ -468,14 +683,18 @@ impl Sensors {
         let freqs: Vec<f64> = self.cpufreq.iter().filter_map(|p| read_f64(p)).collect();
         if !freqs.is_empty() {
             // scaling_cur_freq is in kHz.
-            out.push(("cpu.freq".into(), freqs.iter().sum::<f64>() / freqs.len() as f64 * 1e3));
+            out.push((
+                "cpu.freq".into(),
+                freqs.iter().sum::<f64>() / freqs.len() as f64 * 1e3,
+            ));
         }
 
         if let Some(text) = read_str(&self.proc_.join("meminfo")) {
             out.extend(memory_values(&text));
         }
         if self.has_psi
-            && let Some(v) = read_str(&self.proc_.join("pressure/memory")).and_then(|t| parse_psi_some_avg10(&t))
+            && let Some(v) =
+                read_str(&self.proc_.join("pressure/memory")).and_then(|t| parse_psi_some_avg10(&t))
         {
             out.push(("mem.pressure".into(), v));
         }
@@ -513,7 +732,8 @@ impl Sensors {
                 out.push((format!("{}.health", b.id), h));
             }
             // µW, or µA × µV. Some firmware reports discharge as negative.
-            let power = get("power_now").or_else(|| Some(get("current_now")? * get("voltage_now")? / 1e6));
+            let power =
+                get("power_now").or_else(|| Some(get("current_now")? * get("voltage_now")? / 1e6));
             if let Some(p) = power {
                 out.push((format!("{}.power", b.id), p.abs() / 1e6));
             }
@@ -579,7 +799,9 @@ impl Sensors {
             }
         }
 
-        if let Some(up) = read_str(&self.proc_.join("uptime")).and_then(|t| t.split_whitespace().next()?.parse().ok()) {
+        if let Some(up) = read_str(&self.proc_.join("uptime"))
+            .and_then(|t| t.split_whitespace().next()?.parse().ok())
+        {
             out.push(("sys.uptime".into(), up));
         }
         out
@@ -592,7 +814,10 @@ pub fn parse_net_dev(text: &str) -> Vec<(String, (u64, u64))> {
         .skip(2)
         .filter_map(|l| {
             let (name, rest) = l.split_once(':')?;
-            let f: Vec<u64> = rest.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+            let f: Vec<u64> = rest
+                .split_whitespace()
+                .filter_map(|x| x.parse().ok())
+                .collect();
             Some((name.trim().to_owned(), (*f.first()?, *f.get(8)?)))
         })
         .collect()
@@ -606,8 +831,12 @@ pub fn parse_mountinfo(text: &str) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     for line in text.lines() {
         let f: Vec<&str> = line.split_whitespace().collect();
-        let Some(sep) = f.iter().position(|x| *x == "-") else { continue };
-        let (Some(devno), Some(mnt), Some(source)) = (f.get(2), f.get(4), f.get(sep + 2)) else { continue };
+        let Some(sep) = f.iter().position(|x| *x == "-") else {
+            continue;
+        };
+        let (Some(devno), Some(mnt), Some(source)) = (f.get(2), f.get(4), f.get(sep + 2)) else {
+            continue;
+        };
         // Mount points escape spaces as \040.
         let mnt = mnt.replace("\\040", " ");
         let skip = !source.starts_with("/dev/")
@@ -677,7 +906,9 @@ pub fn memory_values(meminfo: &str) -> Vec<(String, f64)> {
             .map(|v| v * 1024.0)
     };
     let mut out = Vec::new();
-    let (Some(total), Some(avail)) = (kb("MemTotal"), kb("MemAvailable")) else { return out };
+    let (Some(total), Some(avail)) = (kb("MemTotal"), kb("MemAvailable")) else {
+        return out;
+    };
     let used = (total - avail).max(0.0);
     out.push(("mem.total".into(), total));
     out.push(("mem.available".into(), avail));
@@ -722,7 +953,8 @@ mod tests {
             // Tests run in parallel threads of one process: make each tree unique.
             static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
             let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let p = std::env::temp_dir().join(format!("andromeda-test-{name}-{}-{n}", std::process::id()));
+            let p = std::env::temp_dir()
+                .join(format!("andromeda-test-{name}-{}-{n}", std::process::id()));
             let _ = fs::remove_dir_all(&p);
             Tree(p)
         }
@@ -731,11 +963,17 @@ mod tests {
             fs::create_dir_all(p.parent().unwrap()).unwrap();
             fs::write(p, content).unwrap();
         }
-        fn sys(&self) -> PathBuf { self.0.join("sys") }
-        fn proc_(&self) -> PathBuf { self.0.join("proc") }
+        fn sys(&self) -> PathBuf {
+            self.0.join("sys")
+        }
+        fn proc_(&self) -> PathBuf {
+            self.0.join("proc")
+        }
     }
     impl Drop for Tree {
-        fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
     }
 
     const MEMINFO: &str = "MemTotal:       16000000 kB\nMemFree:  1000 kB\nMemAvailable:    6000000 kB\nBuffers:  100 kB\nCached:  2000 kB\nShmem: 100 kB\nSwapTotal: 8000 kB\nSwapFree: 6000 kB\n";
@@ -746,8 +984,14 @@ mod tests {
         t.put("proc/meminfo", MEMINFO);
         t.put("proc/pressure/memory", "some avg10=1.50 avg60=0.00 avg300=0.00 total=8\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=8\n");
         t.put("proc/uptime", "4260.50 1000.00\n");
-        t.put("sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "3000000\n");
-        t.put("sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq", "1000000\n");
+        t.put(
+            "sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+            "3000000\n",
+        );
+        t.put(
+            "sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq",
+            "1000000\n",
+        );
         t.put("sys/block/zram0/mm_stat", "4096 80 12288 0 12288 0 0 0 0\n");
         // k10temp with Tctl and a chiplet sensor.
         t.put("sys/class/hwmon/hwmon9/name", "k10temp\n");
@@ -761,7 +1005,11 @@ mod tests {
             t.put(&format!("sys/class/hwmon/{h}/temp1_input"), "44850\n");
             t.put(&format!("sys/class/hwmon/{h}/temp1_label"), "Composite\n");
             t.put(&format!("sys/devices/{dev}/.keep"), "");
-            symlink(t.0.join(format!("sys/devices/{dev}")), t.0.join(format!("sys/class/hwmon/{h}/device"))).unwrap();
+            symlink(
+                t.0.join(format!("sys/devices/{dev}")),
+                t.0.join(format!("sys/class/hwmon/{h}/device")),
+            )
+            .unwrap();
         }
         t.put("sys/class/hwmon/hwmon10/name", "asus\n");
         t.put("sys/class/hwmon/hwmon10/fan1_input", "4200\n");
@@ -770,9 +1018,18 @@ mod tests {
         t.put("sys/class/drm/card1/device/vendor", "0x1002\n");
         t.put("sys/class/drm/card1/device/device", "0x164e\n");
         t.put("sys/class/drm/card1/device/gpu_busy_percent", "34\n");
-        t.put("sys/class/drm/card1/device/mem_info_vram_used", "486584320\n");
-        t.put("sys/class/drm/card1/device/hwmon/hwmon8/temp1_input", "61000\n");
-        t.put("sys/class/drm/card1/device/hwmon/hwmon8/power1_input", "12290000\n");
+        t.put(
+            "sys/class/drm/card1/device/mem_info_vram_used",
+            "486584320\n",
+        );
+        t.put(
+            "sys/class/drm/card1/device/hwmon/hwmon8/temp1_input",
+            "61000\n",
+        );
+        t.put(
+            "sys/class/drm/card1/device/hwmon/hwmon8/power1_input",
+            "12290000\n",
+        );
         t.put("sys/class/drm/card1-eDP-1/status", "connected\n");
         // NVIDIA card: must be skipped here.
         t.put("sys/class/drm/card0/device/vendor", "0x10de\n");
@@ -781,7 +1038,10 @@ mod tests {
         t.put("sys/class/power_supply/BAT0/type", "Battery\n");
         t.put("sys/class/power_supply/BAT0/capacity", "80\n");
         t.put("sys/class/power_supply/BAT0/energy_full", "77867000\n");
-        t.put("sys/class/power_supply/BAT0/energy_full_design", "90001000\n");
+        t.put(
+            "sys/class/power_supply/BAT0/energy_full_design",
+            "90001000\n",
+        );
         t.put("sys/class/power_supply/BAT0/power_now", "-12500000\n");
         t.put("sys/class/power_supply/BAT0/cycle_count", "0\n");
         t.put("sys/class/power_supply/ADP0/type", "Mains\n");
@@ -789,7 +1049,10 @@ mod tests {
         t.put("sys/class/power_supply/hidpp_battery_0/type", "Battery\n");
         t.put("sys/class/power_supply/hidpp_battery_0/scope", "Device\n");
         t.put("sys/class/power_supply/hidpp_battery_0/capacity", "15\n");
-        t.put("sys/class/power_supply/hidpp_battery_0/model_name", "PRO X 2\n");
+        t.put(
+            "sys/class/power_supply/hidpp_battery_0/model_name",
+            "PRO X 2\n",
+        );
         t
     }
 
@@ -803,23 +1066,54 @@ mod tests {
         let s = Sensors::discover(&t.sys(), &t.proc_());
         let ids: Vec<&str> = s.metrics().iter().map(|m| m.id.as_str()).collect();
         for want in [
-            "cpu.usage", "cpu.core0", "cpu.core1", "cpu.freq", "cpu.temp",
-            "temp.k10temp.3", "temp.nvme@nvme0.1", "temp.nvme@nvme1.1", "fan.asus.1",
-            "mem.used", "mem.pressure", "mem.compressed",
-            "gpu.card1.usage", "gpu.card1.vram_used", "gpu.card1.temp", "gpu.card1.power",
-            "bat.BAT0.charge", "bat.BAT0.health", "bat.BAT0.power", "power.ac",
-            "bat.hidpp_battery_0.charge", "sys.uptime",
+            "cpu.usage",
+            "cpu.core0",
+            "cpu.core1",
+            "cpu.freq",
+            "cpu.temp",
+            "temp.k10temp.3",
+            "temp.nvme@nvme0.1",
+            "temp.nvme@nvme1.1",
+            "fan.asus.1",
+            "mem.used",
+            "mem.pressure",
+            "mem.compressed",
+            "gpu.card1.usage",
+            "gpu.card1.vram_used",
+            "gpu.card1.temp",
+            "gpu.card1.power",
+            "bat.BAT0.charge",
+            "bat.BAT0.health",
+            "bat.BAT0.power",
+            "power.ac",
+            "bat.hidpp_battery_0.charge",
+            "sys.uptime",
         ] {
             assert!(ids.contains(&want), "missing {want} in {ids:?}");
         }
         // Absent or unreadable things never appear.
-        for absent in ["gpu.card1.vram_total", "gpu.card1.clock", "bat.BAT0.cycles", "gpu.card0.usage"] {
+        for absent in [
+            "gpu.card1.vram_total",
+            "gpu.card1.clock",
+            "bat.BAT0.cycles",
+            "gpu.card0.usage",
+        ] {
             assert!(!ids.contains(&absent), "unexpected {absent}");
         }
-        assert!(!ids.iter().any(|i| i.contains("hwmon")), "hwmon index leaked into an id");
+        assert!(
+            !ids.iter().any(|i| i.contains("hwmon")),
+            "hwmon index leaked into an id"
+        );
         let fan = s.metrics().iter().find(|m| m.id == "fan.asus.1").unwrap();
         assert_eq!(fan.name, "cpu fan");
-        let name = |id: &str| s.metrics().iter().find(|m| m.id == id).unwrap().name.clone();
+        let name = |id: &str| {
+            s.metrics()
+                .iter()
+                .find(|m| m.id == id)
+                .unwrap()
+                .name
+                .clone()
+        };
         assert_eq!(name("temp.nvme@nvme0.1"), "SSD");
         assert_eq!(name("temp.nvme@nvme1.1"), "SSD 2");
         assert_eq!(name("temp.k10temp.3"), "CPU Tccd1");
@@ -853,7 +1147,10 @@ mod tests {
         let t = laptop();
         let mut s = Sensors::discover(&t.sys(), &t.proc_());
         let fast = s.sample_with(false);
-        assert!(value(&fast, "cpu.temp").is_some(), "CPU temperature stays fast");
+        assert!(
+            value(&fast, "cpu.temp").is_some(),
+            "CPU temperature stays fast"
+        );
         assert!(value(&fast, "temp.nvme@nvme0.1").is_none());
         assert!(value(&fast, "fan.asus.1").is_none());
         assert!(s.slow_ids().contains(&"fan.asus.1".to_string()));
@@ -881,7 +1178,10 @@ mod tests {
     #[test]
     fn memory_matches_gnome() {
         let v = memory_values(MEMINFO);
-        assert_eq!(value(&v, "mem.used"), Some((16000000.0 - 6000000.0) * 1024.0));
+        assert_eq!(
+            value(&v, "mem.used"),
+            Some((16000000.0 - 6000000.0) * 1024.0)
+        );
         assert_eq!(value(&v, "mem.cached"), Some(2000.0 * 1024.0));
         assert_eq!(value(&v, "mem.swap_used"), Some(2000.0 * 1024.0));
         assert!(memory_values("garbage").is_empty());
@@ -890,7 +1190,13 @@ mod tests {
     #[test]
     fn net_dev() {
         let t = "Inter-|   Receive\n face |bytes\n    lo: 3104447 50711 0 0 0 0 0 0 3104447 50711 0 0 0 0 0 0\n  wlp4s0: 1000 5 0 0 0 0 0 0 2000 7 0 0 0 0 0 0\n";
-        assert_eq!(parse_net_dev(t), vec![("lo".into(), (3104447, 3104447)), ("wlp4s0".into(), (1000, 2000))]);
+        assert_eq!(
+            parse_net_dev(t),
+            vec![
+                ("lo".into(), (3104447, 3104447)),
+                ("wlp4s0".into(), (1000, 2000))
+            ]
+        );
     }
 
     #[test]
@@ -903,17 +1209,23 @@ mod tests {
 50 29 8:17 / /run/media/me/My\\040Stick rw - exfat /dev/sdb1 rw
 ";
         let m = parse_mountinfo(t);
-        assert_eq!(m, vec![
-            ("nvme0n1p3".into(), PathBuf::from("/")),
-            ("sdb1".into(), PathBuf::from("/run/media/me/My Stick")),
-        ]);
+        assert_eq!(
+            m,
+            vec![
+                ("nvme0n1p3".into(), PathBuf::from("/")),
+                ("sdb1".into(), PathBuf::from("/run/media/me/My Stick")),
+            ]
+        );
         assert_eq!(mount_name(&m[1].1), "My Stick");
     }
 
     #[test]
     fn diskstats() {
         let t = " 259       0 nvme0n1 1 2 100 4 5 6 200 8 9 10 11\n";
-        assert_eq!(parse_diskstats(t), vec![("nvme0n1".into(), (100 * 512, 200 * 512))]);
+        assert_eq!(
+            parse_diskstats(t),
+            vec![("nvme0n1".into(), (100 * 512, 200 * 512))]
+        );
     }
 
     #[test]

@@ -9,7 +9,9 @@ use tokio::process::Command;
 /// QR code content, if the image contains one.
 pub fn read_qr(path: &Path) -> Option<String> {
     let file = std::fs::File::open(path).ok()?;
-    let mut reader = png::Decoder::new(std::io::BufReader::new(file)).read_info().ok()?;
+    let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+        .read_info()
+        .ok()?;
     let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     let (w, h) = (info.width as usize, info.height as usize);
@@ -19,11 +21,16 @@ pub fn read_qr(path: &Path) -> Option<String> {
         let i = (y * w + x) * channels;
         match channels {
             1 | 2 => buf[i],
-            _ => ((u16::from(buf[i]) * 3 + u16::from(buf[i + 1]) * 6 + u16::from(buf[i + 2])) / 10) as u8,
+            _ => {
+                ((u16::from(buf[i]) * 3 + u16::from(buf[i + 1]) * 6 + u16::from(buf[i + 2])) / 10)
+                    as u8
+            }
         }
     };
     let mut img = rqrr::PreparedImage::prepare_from_greyscale(w, h, luma);
-    img.detect_grids().into_iter().find_map(|g| g.decode().ok().map(|(_, text)| text))
+    img.detect_grids()
+        .into_iter()
+        .find_map(|g| g.decode().ok().map(|(_, text)| text))
 }
 
 /// Text recognised by Tesseract, or an error explaining what is missing.
@@ -33,12 +40,20 @@ pub async fn read_text(path: &Path) -> Result<String, String> {
         .args(["stdout", "--psm", "3"])
         .output()
         .await
-        .map_err(|_| "Install tesseract and tesseract-langpack-eng to copy text from the screen.".to_owned())?;
+        .map_err(|_| {
+            "Install tesseract and tesseract-langpack-eng to copy text from the screen.".to_owned()
+        })?;
     if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or("OCR failed").to_owned());
+        return Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .last()
+            .unwrap_or("OCR failed")
+            .to_owned());
     }
     // Tesseract ends with a form feed and blank lines.
-    Ok(String::from_utf8_lossy(&out.stdout).trim_end_matches(['\n', '\x0c', ' ']).to_owned())
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .trim_end_matches(['\n', '\x0c', ' '])
+        .to_owned())
 }
 
 /// QR first (exact content), then text recognition.

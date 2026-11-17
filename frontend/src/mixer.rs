@@ -58,7 +58,15 @@ fn AppRow(app: MixApp, outputs: Vec<AudioDevice>, max: f64) -> impl IntoView {
     let boosted = move || shown() > 100.5;
     let set = {
         let key = key.clone();
-        move |v: f64| tauri::call("mixer_volume", Volume { key: key.clone(), percent: v })
+        move |v: f64| {
+            tauri::call(
+                "mixer_volume",
+                Volume {
+                    key: key.clone(),
+                    percent: v,
+                },
+            )
+        }
     };
     let set_input = set.clone();
     let set_reset = set.clone();
@@ -110,11 +118,26 @@ fn AppRow(app: MixApp, outputs: Vec<AudioDevice>, max: f64) -> impl IntoView {
 #[component]
 pub fn MixerTab() -> impl IntoView {
     let d = data();
-    let max = move || d.config.with(|c| c.as_ref().map_or(153, |c| c.mixer.max_volume)) as f64;
-    let hidden = move || d.config.with(|c| c.as_ref().map(|c| c.mixer.hidden.clone()).unwrap_or_default());
+    let max = move || {
+        d.config
+            .with(|c| c.as_ref().map_or(153, |c| c.mixer.max_volume)) as f64
+    };
+    let hidden = move || {
+        d.config.with(|c| {
+            c.as_ref()
+                .map(|c| c.mixer.hidden.clone())
+                .unwrap_or_default()
+        })
+    };
     let apps = move || {
         let hidden = hidden();
-        d.mixer.with(|m| m.apps.iter().filter(|a| !hidden.contains(&a.key)).cloned().collect::<Vec<_>>())
+        d.mixer.with(|m| {
+            m.apps
+                .iter()
+                .filter(|a| !hidden.contains(&a.key))
+                .cloned()
+                .collect::<Vec<_>>()
+        })
     };
 
     view! {

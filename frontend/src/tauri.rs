@@ -14,7 +14,10 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke, catch)]
     async fn invoke_js(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "event"], js_name = listen, catch)]
-    async fn listen_js(event: &str, handler: &Closure<dyn FnMut(JsValue)>) -> Result<JsValue, JsValue>;
+    async fn listen_js(
+        event: &str,
+        handler: &Closure<dyn FnMut(JsValue)>,
+    ) -> Result<JsValue, JsValue>;
 }
 
 pub fn spawn(f: impl Future<Output = ()> + 'static) {
@@ -24,7 +27,8 @@ pub fn spawn(f: impl Future<Output = ()> + 'static) {
 /// Arguments as a plain JS object (Tauri expects camelCase keys, which the
 /// `#[serde(rename_all = "camelCase")]` on argument structs provides).
 fn to_js<A: Serialize>(args: &A) -> JsValue {
-    args.serialize(&serde_wasm_bindgen::Serializer::json_compatible()).unwrap_or(JsValue::UNDEFINED)
+    args.serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+        .unwrap_or(JsValue::UNDEFINED)
 }
 
 /// Calls a command and returns its typed result or the error message.
