@@ -1,0 +1,16 @@
+[package]
+name = "andromeda"
+description = "Andromeda panel UI (Tauri)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+andromeda-core.workspace = true
+zbus.workspace = true
+tauri = { version = "2.12", features = [] }
+tauri-plugin-single-instance = "2.5"
+futures-util = { version = "0.3", default-features = false }

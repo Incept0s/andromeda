@@ -1,0 +1,7 @@
+{
+  "uuid": "andromeda@incept0s.github.io",
+  "name": "Andromeda",
+  "description": "Top-bar button for the Andromeda panel.",
+  "shell-version": ["50"],
+  "url": "https://github.com/incept0s/andromeda"
+}

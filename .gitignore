@@ -1,5 +1,6 @@
 /target/
-/dist/
+frontend/dist/
+crates/ui/gen/
 # Reference screenshots of the original app show its branding; keep them local.
 /docs/reference/*.png
 /docs/reference/*.jpg

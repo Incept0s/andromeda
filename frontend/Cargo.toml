@@ -1,0 +1,12 @@
+[package]
+name = "andromeda-frontend"
+description = "Andromeda panel frontend (Leptos, compiled to WASM by Trunk)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+leptos = { version = "0.8.23", features = ["csr"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"

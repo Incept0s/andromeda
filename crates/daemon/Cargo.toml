@@ -1,0 +1,11 @@
+[package]
+name = "andromedad"
+description = "Andromeda background daemon: sensors, alerts and the D-Bus service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+andromeda-core.workspace = true
+tokio.workspace = true
+zbus.workspace = true
