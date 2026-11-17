@@ -51,6 +51,13 @@ fn hide(app: AppHandle) {
 }
 
 #[tauri::command]
+fn close_settings(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.close();
+    }
+}
+
+#[tauri::command]
 fn set_sticky(app: AppHandle, sticky: bool) {
     if let Ok(mut g) = app.state::<PanelTimes>().sticky.lock() {
         *g = sticky;
@@ -97,6 +104,9 @@ impl Panel {
     fn show(&self) {
         show_panel(&self.app);
     }
+    fn open_settings(&self) {
+        let _ = open_settings(self.app.clone());
+    }
 }
 
 #[tauri::command]
@@ -117,6 +127,10 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
     WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html#settings".into()))
         .title("Andromeda Settings")
         .inner_size(820.0, 600.0)
+        // Same glass as the panel: no GTK frame, our own title bar.
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
         .theme(Some(tauri::Theme::Dark))
         .build()
         .map(|_| ())
@@ -208,6 +222,7 @@ fn main() {
             open_settings,
             hide,
             set_sticky,
+            close_settings,
             commands::clipboard_list,
             commands::clipboard_copy,
             commands::clipboard_pin,

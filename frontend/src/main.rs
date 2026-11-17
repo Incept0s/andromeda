@@ -216,7 +216,7 @@ fn Panel() -> impl IntoView {
     });
 
     view! {
-        <main class="panel">
+        <main class="glass panel">
             <header class="logo"><img src="icons/andromeda-symbolic.svg" alt="" /></header>
             <nav class="tabs" style=move || format!("grid-template-columns:repeat({},1fr)", tabs().len().max(1))>
                 <For each=tabs key=|t| *t as u8 let:t>
@@ -254,7 +254,6 @@ fn Panel() -> impl IntoView {
 fn main() {
     let is_settings = window().location().hash().is_ok_and(|h| h == "#settings");
     if is_settings {
-        let _ = document().body().map(|b| b.set_class_name("opaque"));
         mount_to_body(|| {
             provide_context(start_data());
             view! { <settings::Settings /> }

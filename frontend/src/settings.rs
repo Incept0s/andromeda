@@ -403,6 +403,14 @@ pub fn Settings() -> impl IntoView {
             .collect::<Vec<_>>()
     };
     view! {
+        <main class="glass">
+            // Our own title bar: the window has no GTK frame, so it looks like
+            // the panel. Dragging it moves the window.
+            <header class="titlebar" data-tauri-drag-region>
+                <img src="icons/andromeda-symbolic.svg" alt="" data-tauri-drag-region />
+                <span class="grow" data-tauri-drag-region>"Andromeda Settings"</span>
+                <button class="iconbtn" title="Close" on:click=|_| tauri::call("close_settings", ())><crate::Icon name="x" /></button>
+            </header>
         <div class="settings-shell">
             <aside class="sidebar">
                 <input class="search" type="search" placeholder="Search" on:input=move |e| query.set(event_target_value(&e)) />
@@ -425,5 +433,6 @@ pub fn Settings() -> impl IntoView {
                 </Show>
             </main>
         </div>
+        </main>
     }
 }
