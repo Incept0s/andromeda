@@ -1,8 +1,9 @@
 [package]
 name = "andromeda-core"
-description = "Shared parsers and D-Bus names for Andromeda"
+description = "Shared metric registry, parsers and D-Bus names for Andromeda"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+serde.workspace = true

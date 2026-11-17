@@ -18,7 +18,19 @@ pub struct CpuTimes {
 /// Parses the aggregate `cpu ` line. Returns `None` on unexpected input
 /// instead of panicking: kernels and containers vary.
 pub fn parse_proc_stat(text: &str) -> Option<CpuTimes> {
-    let line = text.lines().find(|l| l.starts_with("cpu "))?;
+    parse_line(text.lines().find(|l| l.starts_with("cpu "))?)
+}
+
+/// Per-core lines (`cpu0`, `cpu1`, ...) in order. Offline cores have no
+/// line, so the count can be lower than the number of installed cores.
+pub fn parse_cores(text: &str) -> Vec<Option<CpuTimes>> {
+    text.lines()
+        .filter(|l| l.starts_with("cpu") && l.as_bytes().get(3).is_some_and(u8::is_ascii_digit))
+        .map(parse_line)
+        .collect()
+}
+
+fn parse_line(line: &str) -> Option<CpuTimes> {
     let fields: Vec<u64> = line
         .split_whitespace()
         .skip(1)
@@ -64,6 +76,13 @@ mod tests {
         let t = parse_proc_stat(SAMPLE).unwrap();
         assert_eq!(t.idle, 16578297 + 6999);
         assert_eq!(t.total, 264069 + 2003 + 81630 + 16578297 + 6999 + 24760 + 11461);
+    }
+
+    #[test]
+    fn parses_cores() {
+        let cores = parse_cores(SAMPLE);
+        assert_eq!(cores.len(), 1);
+        assert_eq!(cores[0].unwrap().idle, 492351 + 499);
     }
 
     #[test]
