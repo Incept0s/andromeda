@@ -1,0 +1,5 @@
+/target/
+/dist/
+# Reference screenshots of the original app show its branding; keep them local.
+/docs/reference/*.png
+/docs/reference/*.jpg
