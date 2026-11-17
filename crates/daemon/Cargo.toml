@@ -9,3 +9,4 @@ license.workspace = true
 andromeda-core.workspace = true
 tokio.workspace = true
 zbus.workspace = true
+nvml-wrapper = "0.13"

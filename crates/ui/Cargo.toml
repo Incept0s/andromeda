@@ -14,3 +14,4 @@ zbus.workspace = true
 tauri = { version = "2.12", features = [] }
 tauri-plugin-single-instance = "2.5"
 futures-util = { version = "0.3", default-features = false }
+tokio = { version = "1", features = ["time"] }
