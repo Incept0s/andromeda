@@ -137,7 +137,7 @@ fn Panel() -> impl IntoView {
 
     view! {
         <main class="panel">
-            <header class="logo"><img src="icons/andromeda-symbolic.svg" alt="" /></header>
+            <header class="logo" data-tauri-drag-region><img src="icons/andromeda-symbolic.svg" alt="" data-tauri-drag-region /></header>
             <nav class="tabs">
                 {Tab::ALL.into_iter().map(|t| view! {
                     <button
