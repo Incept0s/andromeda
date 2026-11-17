@@ -59,6 +59,9 @@ cp -a usr %{buildroot}/
 %files
 %license usr/share/licenses/%{name}/LICENSE
 %doc usr/share/doc/%{name}/README.md
+%doc usr/share/doc/%{name}/CHANGELOG.md
+%doc usr/share/doc/%{name}/THIRD-PARTY.md
+%doc usr/share/doc/%{name}/THIRD-PARTY-LICENSES.md
 %{_bindir}/andromeda
 %{_libexecdir}/andromedad
 %{_userunitdir}/andromedad.service

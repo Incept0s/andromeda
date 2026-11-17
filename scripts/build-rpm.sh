@@ -32,7 +32,9 @@ mkdir -p "$u/share/gnome-shell/extensions/$UUID"
 cp -r "extension/$UUID/." "$u/share/gnome-shell/extensions/$UUID/"
 glib-compile-schemas --strict "$u/share/gnome-shell/extensions/$UUID/schemas"
 install -Dm644 LICENSE "$u/share/licenses/andromeda/LICENSE"
-install -Dm644 README.md "$u/share/doc/andromeda/README.md"
+for f in README.md CHANGELOG.md THIRD-PARTY.md THIRD-PARTY-LICENSES.md; do
+    install -Dm644 "$f" "$u/share/doc/andromeda/$f"
+done
 
 tar -czf "$TOP/SOURCES/andromeda-$VERSION.tar.gz" -C "$TOP/stage" "andromeda-$VERSION"
 rpmbuild -bb packaging/andromeda.spec \

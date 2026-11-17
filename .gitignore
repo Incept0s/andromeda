@@ -5,3 +5,9 @@ crates/ui/gen/
 /docs/reference/*.png
 /docs/reference/*.jpg
 extension/*/schemas/gschemas.compiled
+# Editors and OS clutter
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

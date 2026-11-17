@@ -32,7 +32,14 @@ echo "==> Building"
 scripts/build-rpm.sh
 
 echo "==> Installing"
-sudo dnf install -y "$ROOT"/target/rpm/RPMS/x86_64/andromeda-*.rpm
+RPM=$(ls "$ROOT"/target/rpm/RPMS/x86_64/andromeda-*.rpm)
+if rpm -q andromeda >/dev/null 2>&1; then
+    # Already installed: replace it even when the version did not change
+    # (dnf would skip a rebuild of the same version).
+    sudo rpm -Uvh --replacepkgs "$RPM"
+else
+    sudo dnf install -y "$RPM"
+fi
 
 cat <<'EOF'
 
