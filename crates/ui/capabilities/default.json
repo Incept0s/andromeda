@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Only what the bundled frontend needs: receive pushed events. App commands (quit, open_settings) are allowed by default.",
   "windows": ["main", "settings"],
-  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-start-dragging"]
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }
