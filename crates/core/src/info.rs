@@ -95,3 +95,12 @@ pub struct MixerState {
     pub default_output: String,
     pub default_input: String,
 }
+
+/// One line of Settings → System check.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Check {
+    pub name: String,
+    pub ok: bool,
+    /// What it enables, or how to fix it.
+    pub detail: String,
+}

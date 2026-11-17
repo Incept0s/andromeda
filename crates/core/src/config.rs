@@ -162,6 +162,21 @@ impl Config {
     }
 }
 
+/// The user's top-bar choice, or the defaults that exist on this machine:
+/// CPU temperature, memory %, laptop battery power.
+pub fn topbar_or_default(c: &Config, metrics: &[crate::metrics::MetricInfo]) -> Vec<String> {
+    if let Some(t) = &c.topbar {
+        return t.clone();
+    }
+    let has = |id: &str| metrics.iter().any(|m| m.id == id);
+    let mut v: Vec<String> = ["cpu.temp", "mem.used_pct"].into_iter().filter(|id| has(id)).map(String::from).collect();
+    // The laptop battery is the one with a health metric (not a mouse).
+    if let Some(m) = metrics.iter().find(|m| m.id.ends_with(".power") && m.id.starts_with("bat.") && has(&m.id.replace(".power", ".health"))) {
+        v.push(m.id.clone());
+    }
+    v
+}
+
 /// `gpu.*.temp` matches `gpu.card1.temp`; `*` stands for one id segment.
 pub fn pattern_matches(pattern: &str, id: &str) -> bool {
     let (mut p, mut i) = (pattern.split('.'), id.split('.'));

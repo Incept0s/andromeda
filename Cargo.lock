@@ -47,6 +47,8 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "futures-util",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",

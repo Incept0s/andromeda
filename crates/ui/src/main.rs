@@ -6,35 +6,16 @@
 //! Shell extension can toggle the panel. Wayland apps cannot place their own
 //! windows, so the extension moves the window under the top-bar icon.
 
-use std::collections::HashMap;
+mod commands;
+
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use andromeda_core::dbus;
-use andromeda_core::metrics::{Group, MetricInfo, Unit};
+use commands::{DaemonProxy, daemon};
 use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use zbus::{connection, interface, proxy};
-
-/// Client side of the daemon's interface. The macro generates `DaemonProxy`
-/// with typed methods and a `receive_values_changed()` stream.
-#[proxy(
-    interface = "io.github.incept0s.Andromeda1",
-    default_service = "io.github.incept0s.Andromeda",
-    default_path = "/io/github/incept0s/Andromeda"
-)]
-trait Daemon {
-    #[zbus(property)]
-    fn values(&self) -> zbus::Result<HashMap<String, f64>>;
-    fn metrics(&self) -> zbus::Result<Vec<(String, String, String, String)>>;
-    fn history(&self) -> zbus::Result<HashMap<String, Vec<f64>>>;
-    fn quit(&self) -> zbus::Result<()>;
-}
-
-async fn daemon(app: &AppHandle) -> Result<DaemonProxy<'static>, String> {
-    let conn = app.try_state::<zbus::Connection>().ok_or("D-Bus not ready")?;
-    DaemonProxy::new(&conn).await.map_err(|e| e.to_string())
-}
+use zbus::{connection, interface};
 
 /// When the panel was last shown, and when it last hid because it lost focus.
 #[derive(Default)]
@@ -84,24 +65,6 @@ impl Panel {
     }
 }
 
-/// Every metric the daemon knows. Entries with an unknown unit or group
-/// (a newer daemon) are skipped rather than failing the whole list.
-#[tauri::command]
-async fn metrics(app: AppHandle) -> Result<Vec<MetricInfo>, String> {
-    let list = daemon(&app).await?.metrics().await.map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .filter_map(|(id, name, unit, group)| {
-            Some(MetricInfo::new(id, name, Unit::parse(&unit)?, Group::parse(&group)?))
-        })
-        .collect())
-}
-
-#[tauri::command]
-async fn history(app: AppHandle) -> Result<HashMap<String, Vec<f64>>, String> {
-    daemon(&app).await?.history().await.map_err(|e| e.to_string())
-}
-
 #[tauri::command]
 async fn quit(app: AppHandle) {
     // Quit means everything stops, daemon included. Errors are ignored: the
@@ -119,14 +82,21 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
     }
     WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html#settings".into()))
         .title("Andromeda Settings")
-        .inner_size(720.0, 520.0)
+        .inner_size(820.0, 600.0)
+        .theme(Some(tauri::Theme::Dark))
         .build()
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
-/// Registers the panel D-Bus name, then forwards the daemon's values to the
-/// frontend, but only while the panel is visible (no drawing when hidden).
+fn panel_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(false)
+}
+
+/// Registers the panel D-Bus name, then forwards daemon updates to the
+/// frontend as events: live values and mixer changes only while the panel
+/// is visible (no drawing when hidden), settings and keep-awake always
+/// (the Settings window needs them too).
 async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
     let conn = connection::Builder::session()
         .serve_at(dbus::PANEL_PATH, Panel { app: app.clone() })
@@ -135,15 +105,29 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
         .await?;
     app.manage(conn.clone());
 
-    let daemon = DaemonProxy::new(&conn).await?;
-    let mut changes = daemon.receive_values_changed().await;
-    while let Some(change) = changes.next().await {
-        let visible = app
-            .get_webview_window("main")
-            .and_then(|w| w.is_visible().ok())
-            .unwrap_or(false);
-        if visible && let Ok(values) = change.get().await {
-            let _ = app.emit_to("main", "values", values);
+    let d = DaemonProxy::new(&conn).await?;
+    let (mut values, mut mixer) = (d.receive_values_changed().await, d.receive_mixer_changed().await);
+    let (mut config, mut awake) = (d.receive_config_changed().await, d.receive_awake_until_changed().await);
+    loop {
+        tokio::select! {
+            Some(c) = values.next() => if panel_visible(&app) && let Ok(v) = c.get().await {
+                let _ = app.emit_to("main", "values", v);
+            },
+            Some(c) = mixer.next() => if panel_visible(&app)
+                && let Ok(s) = c.get().await
+                && let Ok(m) = serde_json::from_str::<andromeda_core::info::MixerState>(&s)
+            {
+                let _ = app.emit_to("main", "mixer", m);
+            },
+            Some(c) = config.next() => if let Ok(s) = c.get().await
+                && let Ok(cfg) = serde_json::from_str::<andromeda_core::config::Config>(&s)
+            {
+                let _ = app.emit("config", cfg);
+            },
+            Some(c) = awake.next() => if let Ok(v) = c.get().await {
+                let _ = app.emit("awake", v);
+            },
+            else => break,
         }
     }
     Ok(())
@@ -185,7 +169,33 @@ fn main() {
             }
         }))
         .manage(PanelTimes::default())
-        .invoke_handler(tauri::generate_handler![metrics, history, quit, open_settings])
+        .invoke_handler(tauri::generate_handler![
+            quit,
+            open_settings,
+            commands::metrics,
+            commands::history,
+            commands::config,
+            commands::set_config,
+            commands::awake_until,
+            commands::awake_start,
+            commands::awake_stop,
+            commands::power_profile,
+            commands::set_power_profile,
+            commands::top_apps,
+            commands::interfaces,
+            commands::network_apps,
+            commands::speed_test,
+            commands::drives,
+            commands::eject,
+            commands::mixer,
+            commands::mixer_volume,
+            commands::mixer_mute,
+            commands::mixer_output,
+            commands::mixer_default,
+            commands::open_path,
+            commands::system_check,
+            commands::open_releases,
+        ])
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;

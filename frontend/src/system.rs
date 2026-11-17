@@ -6,15 +6,7 @@
 use andromeda_core::metrics::{Group, Pressure, Unit, format, format_bytes, format_duration, pressure_level};
 use leptos::prelude::*;
 
-use crate::{Data, HISTORY};
-
-fn data() -> Data {
-    expect_context::<Data>()
-}
-
-fn fmt(id: &str, unit: Unit) -> String {
-    data().value(id).map_or("–".into(), |v| format(v, unit))
-}
+use crate::widgets::{Bar, KeyValue, Spark, data, fmt, kv};
 
 /// GPUs as (id prefix, display name), e.g. ("gpu.card1", "Radeon 610M").
 fn gpus() -> Vec<(String, String)> {
@@ -36,44 +28,11 @@ fn gpus() -> Vec<(String, String)> {
 }
 
 /// The laptop's own battery: the only kind with a health metric.
-fn system_battery() -> Option<String> {
+pub fn system_battery() -> Option<String> {
     data().metrics.with(|ms| {
         ms.iter()
             .find_map(|m| m.id.strip_suffix(".health").map(str::to_owned))
     })
-}
-
-/// SVG sparkline of a metric's history. `max` fixes the scale (100 for
-/// percentages); otherwise the graph scales to its own peak.
-#[component]
-fn Spark(id: String, #[prop(optional)] max: Option<f64>, #[prop(default = "accent")] color: &'static str) -> impl IntoView {
-    let points = move || {
-        data().history.with(|h| {
-            let Some(q) = h.get(&id) else { return String::new() };
-            let top = max.unwrap_or_else(|| q.iter().copied().fold(1e-9, f64::max));
-            let offset = HISTORY.saturating_sub(q.len());
-            q.iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let x = (offset + i) as f64 * 300.0 / (HISTORY - 1) as f64;
-                    let y = 30.0 - (v / top).clamp(0.0, 1.0) * 28.0 - 1.0;
-                    format!("{x:.1},{y:.1}")
-                })
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
-    };
-    view! {
-        <svg class=format!("spark {color}") viewBox="0 0 300 30" preserveAspectRatio="none">
-            <polyline points=points />
-        </svg>
-    }
-}
-
-#[component]
-fn Bar(id: String, #[prop(default = "accent")] color: &'static str) -> impl IntoView {
-    let width = move || format!("width:{:.1}%", data().value(&id).unwrap_or(0.0).clamp(0.0, 100.0));
-    view! { <div class="bar"><div class=format!("fill {color}") style=width></div></div> }
 }
 
 /// Label / bar / value row with a sparkline below; click to expand details.
@@ -101,18 +60,6 @@ fn UsageRow(
             </Show>
         </div>
     }
-}
-
-/// "name ........ value" line used inside expanded details and lists.
-#[component]
-fn KeyValue(name: String, value: Signal<String>) -> impl IntoView {
-    view! { <div class="kv"><span class="muted">{name}</span><span>{value}</span></div> }
-}
-
-fn kv(name: &str, id: &str, unit: Unit) -> impl IntoView + use<> {
-    let id = id.to_owned();
-    let has = data().info(&id).is_some();
-    has.then(|| view! { <KeyValue name=name.to_owned() value=Signal::derive(move || fmt(&id, unit)) /> })
 }
 
 #[component]
@@ -154,7 +101,7 @@ fn GpuDetails(prefix: String) -> impl IntoView {
     };
     let has_vram = data().info(&format!("{prefix}.vram_used")).is_some();
     view! {
-        {has_vram.then(|| view! { <KeyValue name="Memory".into() value=Signal::derive(vram) /> })}
+        {has_vram.then(|| view! { <KeyValue name="Memory" value=Signal::derive(vram) /> })}
         {kv("Clock", &format!("{prefix}.clock"), Unit::Hertz)}
         {kv("Power", &format!("{prefix}.power"), Unit::Watts)}
         {kv("Temperature", &format!("{prefix}.temp"), Unit::Celsius)}
@@ -177,7 +124,7 @@ fn BatteryDetails(prefix: String) -> impl IntoView {
         }
     };
     view! {
-        <KeyValue name="State".into() value=Signal::derive(state) />
+        <KeyValue name="State" value=Signal::derive(state) />
         {kv("Health", &format!("{prefix}.health"), Unit::Percent)}
         {kv("Charge cycles", &format!("{prefix}.cycles"), Unit::Flag)}
     }
@@ -224,7 +171,7 @@ fn Memory() -> impl IntoView {
                 <div class="details">
                     {kv("Available", "mem.available", Unit::Bytes)}
                     {kv("Cached files", "mem.cached", Unit::Bytes)}
-                    <KeyValue name="Swap".into() value=Signal::derive(swap) />
+                    <KeyValue name="Swap" value=Signal::derive(swap) />
                     {kv("Compressed (zram)", "mem.compressed", Unit::Bytes)}
                 </div>
             </Show>

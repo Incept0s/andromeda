@@ -7,6 +7,7 @@
 //! UI and the Shell extension are thin clients of this interface.
 
 mod alerts;
+mod check;
 mod config_file;
 mod desktop;
 mod drives;
@@ -265,6 +266,12 @@ impl Daemon {
     async fn eject(&self, drive: &str) -> fdo::Result<()> {
         let sys = self.system.as_ref().ok_or_else(|| fdo::Error::Failed("no system bus".into()))?;
         drives::eject(sys, drive).await.map_err(fdo::Error::Failed)
+    }
+
+    /// Settings → System check, as JSON (`Vec<info::Check>`).
+    async fn system_check(&self) -> String {
+        let list = check::run(&self.session, self.system.as_ref(), &self.metrics, self.mixer.connected).await;
+        serde_json::to_string(&list).unwrap_or_default()
     }
 
     /// Exits the daemon. The panel's Quit button calls this.

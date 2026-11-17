@@ -215,3 +215,204 @@ html, body {
 body.opaque { background: #1e1e22; }
 .settings { padding: 24px; }
 .settings h1 { font-size: 20px; margin-bottom: 8px; }
+
+/* ---------- shared controls ---------- */
+.content > .card + .card { margin-top: 10px; }
+.small { font-size: 12px; }
+.accent-text { color: var(--accent); }
+.error { color: var(--red); }
+.warn-text { color: var(--yellow); }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+button { font: inherit; color: inherit; }
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--track);
+  transition: background 0.15s ease;
+}
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.switch.on { background: var(--accent); }
+.switch.on i { transform: translateX(18px); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  font-size: 13px;
+}
+.chip:hover { background: rgba(255, 255, 255, 0.09); }
+.chip.sel { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.btn.small-btn { height: 30px; padding: 0 14px; margin-top: 8px; font-size: 13px; }
+.btn:disabled { opacity: 0.5; }
+.iconbtn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.iconbtn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.link { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; }
+
+.picker {
+  max-width: 150px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.picker option { background: #26262b; }
+
+/* ---------- keep awake ---------- */
+.awake.on { border-color: var(--accent); }
+
+/* ---------- mixer ---------- */
+.mix { display: flex; gap: 10px; padding: 6px 0; }
+.mix + .mix { border-top: 1px solid var(--card-border); }
+.mix-icon { position: relative; flex: none; width: 34px; height: 34px; display: grid; place-items: center; }
+.mix-icon img { width: 34px; height: 34px; object-fit: contain; }
+.mix-icon .icon { width: 22px; height: 22px; color: var(--muted); }
+.live {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid #1d1d21;
+}
+.mix-body { flex: 1; min-width: 0; }
+.pct { width: 56px; }
+.pct.boost, .muted-on { color: #ff9f0a; }
+
+/* Range slider: the filled part is drawn with a gradient up to --fill. */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--track) var(--fill));
+}
+.slider.boost { background: linear-gradient(to right, #ff9f0a var(--fill), var(--track) var(--fill)); }
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 14px;
+  border-radius: 7px;
+  background: #3c4a5e;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.slider.boost::-webkit-slider-thumb { background: #8a5a20; }
+
+/* ---------- network ---------- */
+.iface + .iface { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--card-border); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--green); }
+.addr { margin-left: 18px; font-variant-numeric: tabular-nums; color: var(--muted); -webkit-user-select: text; user-select: text; }
+
+/* ---------- settings window ---------- */
+body.opaque { color-scheme: dark; }
+.settings-shell { display: flex; height: 100vh; }
+.sidebar {
+  width: 210px;
+  flex: none;
+  padding: 14px 10px;
+  border-right: 1px solid var(--card-border);
+  background: #19191c;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.search {
+  height: 32px;
+  margin-bottom: 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+}
+.nav {
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+.nav:hover { background: rgba(255, 255, 255, 0.05); }
+.nav.active { background: var(--accent-soft); color: var(--accent); }
+.page { flex: 1; overflow-y: auto; padding: 22px 28px; }
+.page h2 { font-size: 20px; margin-bottom: 6px; }
+.page > p { margin-bottom: 12px; }
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.preview {
+  padding: 8px 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  background: #000;
+  font-variant-numeric: tabular-nums;
+  min-height: 34px;
+}
+.order { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 14px; }
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  cursor: grab;
+}
+.grip { color: var(--muted); letter-spacing: -2px; }
+.check { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.num {
+  width: 70px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+}
+.unit { width: 40px; }
+.status { width: 22px; text-align: center; font-weight: 700; }
+.status.ok { color: var(--green); }
+.status.missing { color: var(--muted); }
+.page .sub { border-top: 0; padding-top: 0; margin-top: 16px; }
+.iconbtn .icon { width: 15px; height: 15px; }
+.pct .icon { width: 12px; height: 12px; vertical-align: -1px; margin-right: 2px; }
+.pct { white-space: nowrap; }

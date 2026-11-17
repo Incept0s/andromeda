@@ -5,6 +5,7 @@
 
 use std::future::Future;
 
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 
@@ -20,18 +21,31 @@ pub fn spawn(f: impl Future<Output = ()> + 'static) {
     leptos::task::spawn_local(f);
 }
 
-/// Fire-and-forget command without arguments.
-pub fn call(cmd: &'static str) {
-    spawn(async move {
-        let _ = invoke_js(cmd, JsValue::UNDEFINED).await;
-    });
+/// Arguments as a plain JS object (Tauri expects camelCase keys, which the
+/// `#[serde(rename_all = "camelCase")]` on argument structs provides).
+fn to_js<A: Serialize>(args: &A) -> JsValue {
+    args.serialize(&serde_wasm_bindgen::Serializer::json_compatible()).unwrap_or(JsValue::UNDEFINED)
 }
 
-/// Command with a typed result; `None` on any error (the UI just waits for
+/// Calls a command and returns its typed result or the error message.
+pub async fn invoke<A: Serialize, T: DeserializeOwned>(cmd: &str, args: &A) -> Result<T, String> {
+    match invoke_js(cmd, to_js(args)).await {
+        Ok(v) => serde_wasm_bindgen::from_value(v).map_err(|e| e.to_string()),
+        Err(e) => Err(e.as_string().unwrap_or_else(|| "failed".into())),
+    }
+}
+
+/// Command without arguments; `None` on any error (the UI just waits for
 /// the next attempt instead of showing a broken state).
 pub async fn get<T: DeserializeOwned>(cmd: &str) -> Option<T> {
-    let v = invoke_js(cmd, JsValue::UNDEFINED).await.ok()?;
-    serde_wasm_bindgen::from_value(v).ok()
+    invoke(cmd, &()).await.ok()
+}
+
+/// Fire-and-forget command.
+pub fn call<A: Serialize + 'static>(cmd: &'static str, args: A) {
+    spawn(async move {
+        let _ = invoke::<A, ()>(cmd, &args).await;
+    });
 }
 
 /// Subscribes to a backend event with a typed payload. The closure must
