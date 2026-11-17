@@ -3,6 +3,7 @@
 //! descriptions and formatting (`metrics`), and the Linux sensor registry
 //! (`sensors`, `cpu`), plus D-Bus names. The frontend only uses `metrics`.
 
+pub mod config;
 pub mod cpu;
 pub mod metrics;
 pub mod sensors;

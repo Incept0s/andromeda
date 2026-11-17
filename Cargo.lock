@@ -59,6 +59,7 @@ name = "andromeda-core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -80,7 +81,9 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "nvml-wrapper",
+ "serde_json",
  "tokio",
+ "toml 1.2.1+spec-1.1.0",
  "zbus 6.3.0",
 ]
 

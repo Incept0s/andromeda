@@ -10,3 +10,5 @@ andromeda-core.workspace = true
 tokio.workspace = true
 zbus.workspace = true
 nvml-wrapper = "0.13"
+toml = "1"
+serde_json = "1"
