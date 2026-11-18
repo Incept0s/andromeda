@@ -10,8 +10,8 @@
  * Shell → Applications to blur behind both windows. The tint fills the whole
  * window (no margin), so the blurred rectangle never shows as a band.
  *
- * One scale for everything: spacing 4/8/12/16 px, radii window 16 /
- * card 12 / control 8 / pill.
+ * One scale for everything: spacing 4/8/12/16 px, radii window 20 (as the
+ * shell's menus, .popup-menu-content) / card 12 / control 8 / pill.
  */
 
 :root {
@@ -39,7 +39,7 @@
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
-  --r-window: 16px;
+  --r-window: 20px;
   --r-card: 12px;
   --r-control: 8px;
   --r-pill: 999px;
@@ -73,8 +73,11 @@ input, select { text-shadow: none; }
   flex-direction: column;
   border-radius: var(--r-window);
   border: 1px solid var(--edge);
-  background-color: rgba(25, 25, 25, 0.40);
-  background-image: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
+  /* Gradient only. The shell's Glass Tint rules also set background-color,
+     but St keeps one background slot and the gradient replaces it there.
+     In a browser both are painted, the gradient on top of the color, which
+     made this glass about 65 % opaque instead of the shell's 42 %. */
+  background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
   overflow: hidden;
 }
 
