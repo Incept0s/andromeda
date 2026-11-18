@@ -16,6 +16,11 @@ All notable changes to Andromeda are listed here. The format follows
 - Optional converter icon in the top bar (off by default): drop a file on it
   and a small converter window opens with that file. Converted files can be
   put on the shelf with one click.
+- Clipboard history keeps copied images too (PNG, the last 30, up to 20 MB
+  each, stored readable only by you), with previews.
+- Optional clipboard icon in the top bar (off by default): a small window
+  with the history; click an entry to make it the clipboard again, the
+  window closes so you can paste.
 
 ### Changed
 

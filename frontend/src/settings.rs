@@ -52,7 +52,7 @@ impl Page {
             Page::General => "login startup update version",
             Page::Features => "tabs enable disable on off switch",
             Page::TopBar => {
-                "panel numbers metrics order temperature position left right vitals icons shelf files"
+                "panel numbers metrics order temperature position left right vitals icons shelf files converter clipboard history images"
             }
             Page::Alerts => "notifications threshold warning",
             Page::Mixer => "volume boost audio sound hidden apps",
@@ -232,6 +232,7 @@ fn TopBar() -> impl IntoView {
             </div>
         </div>
         <Toggle label="Converter" hint="Drop a file on it to turn it into another format." get=|c| c.icons.convert set=|c, v| c.icons.convert = v />
+        <Toggle label="Clipboard" hint="Your last copied texts and images; click one to copy it again. Needs Clipboard history (Features)." get=|c| c.icons.clipboard set=|c, v| c.icons.clipboard = v />
         <h3 class="sub">"Numbers"</h3>
         <div class="order">
             {move || chosen().into_iter().enumerate().map(|(i, id)| {

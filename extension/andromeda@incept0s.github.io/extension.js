@@ -7,8 +7,8 @@
 //
 // Clipboard: Mutter offers no clipboard-manager protocol, so only code
 // inside the Shell sees copies made in other apps. This file forwards
-// copied text to the daemon (which stores it) and sets the clipboard when
-// the daemon asks. It keeps no history itself.
+// copied text and PNG images to the daemon (which stores them) and sets the
+// clipboard when the daemon asks. It keeps no history itself.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -34,6 +34,9 @@ const DAEMON_PATH = '/io/github/incept0s/Andromeda';
 const DAEMON_IFACE = 'io.github.incept0s.Andromeda1';
 // Password managers mark secrets with this type; they never enter history.
 const SECRET_HINT = 'x-kde-passwordManagerHint';
+// Bigger image copies are not kept (same limit as the daemon).
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const TEXT_TYPES = ['text/plain', 'text/plain;charset=utf-8', 'UTF8_STRING', 'STRING', 'TEXT'];
 // GNOME's own items at the right end of the bar (quick settings holds the
 // network, VPN, sound and battery icons). Andromeda's icons go just before.
 const SYSTEM_ROLES = ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'];
@@ -95,6 +98,11 @@ export default class AndromedaExtension extends Extension {
         });
         this._vitals.add_child(this._label);
         this._vitals.visible = false;
+        // At shell shutdown the bar is destroyed before the daemon's name
+        // vanishes; stop touching the label then.
+        this._vitals.connect('destroy', () => {
+            this._label = null;
+        });
         this._vitals.connect('button-press-event', () => {
             this._toggle();
             return Clutter.EVENT_STOP;
@@ -126,6 +134,9 @@ export default class AndromedaExtension extends Extension {
         this._setClipboardId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, DAEMON_IFACE,
             'SetClipboard', DAEMON_PATH, null, Gio.DBusSignalFlags.NONE,
             (_c, _s, _p, _i, _n, params) => this._setClipboard(...params.deep_unpack()));
+        this._setClipboardImageId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, DAEMON_IFACE,
+            'SetClipboardImage', DAEMON_PATH, null, Gio.DBusSignalFlags.NONE,
+            (_c, _s, _p, _i, _n, params) => this._setClipboardImage(...params.deep_unpack()));
 
         this._propsId = Gio.DBus.session.signal_subscribe(DAEMON_NAME, 'org.freedesktop.DBus.Properties',
             'PropertiesChanged', DAEMON_PATH, DAEMON_IFACE, Gio.DBusSignalFlags.NONE,
@@ -157,6 +168,7 @@ export default class AndromedaExtension extends Extension {
         this._selection.disconnect(this._ownerChangedId);
         this._selection = null;
         Gio.DBus.session.signal_unsubscribe(this._setClipboardId);
+        Gio.DBus.session.signal_unsubscribe(this._setClipboardImageId);
         Gio.DBus.session.signal_unsubscribe(this._propsId);
         Gio.bus_unwatch_name(this._watchId);
         this._setSwitcher(false);
@@ -283,14 +295,52 @@ export default class AndromedaExtension extends Extension {
     _onClipboardChanged(sel, type) {
         if (type !== Meta.SelectionType.SELECTION_CLIPBOARD)
             return;
-        if (sel.get_mimetypes(type).includes(SECRET_HINT))
+        const mimes = sel.get_mimetypes(type);
+        if (mimes.includes(SECRET_HINT))
             return;
+        // An image without text (screenshot, "Copy image" in a browser).
+        // Copies with both (office apps) are kept as text.
+        if (mimes.includes('image/png') && !mimes.some(m => TEXT_TYPES.includes(m))) {
+            this._forwardImage();
+            return;
+        }
         St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (_clip, text) => {
             if (!text)
                 return;
             // Fire and forget: if the daemon is not running, nothing is kept.
             Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, 'ClipboardAdd',
                 new GLib.Variant('(s)', [text]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
+        });
+    }
+
+    _forwardImage() {
+        St.Clipboard.get_default().get_content(St.ClipboardType.CLIPBOARD, 'image/png', (_clip, bytes) => {
+            if (!bytes || bytes.get_size() === 0 || bytes.get_size() > MAX_IMAGE_BYTES)
+                return;
+            const args = GLib.Variant.new_tuple([
+                GLib.Variant.new_from_bytes(new GLib.VariantType('ay'), bytes, true),
+                GLib.Variant.new_string('image/png'),
+            ]);
+            // Fire and forget: if the daemon is not running, nothing is kept.
+            Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, 'ClipboardAddImage',
+                args, null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
+        });
+    }
+
+    /** Puts a stored history image back on the clipboard. */
+    _setClipboardImage(path) {
+        // Only files from the daemon's own image folder.
+        const dir = GLib.build_filenamev([GLib.get_user_data_dir(), DAEMON_NAME, 'clipboard-images']);
+        if (!path.startsWith(`${dir}/`) || !path.endsWith('.png'))
+            return;
+        Gio.File.new_for_path(path).load_contents_async(null, (file, res) => {
+            try {
+                const [, contents] = file.load_contents_finish(res);
+                St.Clipboard.get_default().set_content(St.ClipboardType.CLIPBOARD, 'image/png',
+                    new GLib.Bytes(contents));
+            } catch (e) {
+                console.warn(`Andromeda: could not copy the image: ${e.message}`);
+            }
         });
     }
 

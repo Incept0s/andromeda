@@ -341,6 +341,11 @@ impl Daemon {
     #[zbus(signal)]
     async fn set_clipboard(e: &SignalEmitter<'_>, text: &str, mime: &str) -> zbus::Result<()>;
 
+    /// Asks the Shell extension to put a stored history image (PNG file in
+    /// our data folder) on the clipboard.
+    #[zbus(signal)]
+    async fn set_clipboard_image(e: &SignalEmitter<'_>, path: &str) -> zbus::Result<()>;
+
     /// A background job finished; `result` is text/JSON or the error.
     #[zbus(signal)]
     async fn job_done(e: &SignalEmitter<'_>, id: u32, ok: bool, result: &str) -> zbus::Result<()>;
@@ -386,9 +391,40 @@ impl Daemon {
         serde_json::to_string(&v).unwrap_or_default()
     }
 
+    /// Called by the Shell extension for every image copy (PNG bytes).
+    /// Checking and previewing runs off the D-Bus thread; the entry is
+    /// added when that is done.
+    async fn clipboard_add_image(
+        &self,
+        data: Vec<u8>,
+        mime: &str,
+        #[zbus(object_server)] server: &zbus::ObjectServer,
+    ) {
+        if !self.config.features.clipboard
+            || mime != "image/png"
+            || data.len() > clipboard::MAX_IMAGE_BYTES
+        {
+            return;
+        }
+        let Ok(iface) = server.interface::<_, Daemon>(dbus::DAEMON_PATH).await else {
+            return;
+        };
+        tokio::spawn(async move {
+            if let Ok(Some(img)) =
+                tokio::task::spawn_blocking(move || clipboard::ClipImage::from_png(data)).await
+            {
+                iface.get_mut().await.clipboard.add_image(img, unix_now());
+            }
+        });
+    }
+
     async fn clipboard_copy(&self, id: u64, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
-        if let Some(t) = self.clipboard.text(id) {
-            jobs::set_clipboard(&e, &t, "text/plain;charset=utf-8").await;
+        match self.clipboard.get(id) {
+            Some(c) if c.image.is_some() => {
+                let _ = Self::set_clipboard_image(&e, c.image.as_deref().unwrap_or_default()).await;
+            }
+            Some(c) => jobs::set_clipboard(&e, &c.text, "text/plain;charset=utf-8").await,
+            None => {}
         }
     }
 

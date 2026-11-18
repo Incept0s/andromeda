@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Tool icons in the top bar (shelf, ...), between the open apps and the
+// Tool icons in the top bar (shelf, converter, clipboard), between the open apps and the
 // Andromeda icon. Deliberately thin, like the rest of the extension:
 //
 // * A click asks the panel app (over D-Bus) to show or hide the tool's
@@ -47,6 +47,10 @@ const TOOLS = [
         name: 'convert', label: 'Converter', icon: 'media-playlist-repeat-symbolic', title: 'Andromeda Converter',
         drop: [PANEL_NAME, PANEL_PATH, PANEL_IFACE, 'ConvertFile', '(s)'],
     },
+    {
+        name: 'clipboard', label: 'Clipboard', icon: 'edit-paste-symbolic', title: 'Andromeda Clipboard',
+        drop: null,
+    },
 ];
 
 /** Local paths from a text/uri-list ("#" lines are comments). */
@@ -84,6 +88,10 @@ export class ToolIcons {
             });
             // Shown once the daemon's settings say so.
             button.visible = false;
+            // Destroyed with the bar at shell shutdown: forget it.
+            button.connect('destroy', () => {
+                this._tools = this._tools.filter(x => x.button !== button);
+            });
             Main.panel.addToStatusArea(`${uuid}-${t.name}`, button);
             return {...t, button, count};
         });

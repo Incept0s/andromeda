@@ -72,6 +72,8 @@ pub struct Icons {
     pub shelf: bool,
     /// Converter: drop a file on it to see what it can be turned into.
     pub convert: bool,
+    /// Clipboard: the last copied texts and images, click one to copy it.
+    pub clipboard: bool,
 }
 
 impl Default for Icons {
@@ -79,6 +81,7 @@ impl Default for Icons {
         Self {
             shelf: true,
             convert: false,
+            clipboard: false,
         }
     }
 }

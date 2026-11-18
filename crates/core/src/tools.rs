@@ -6,10 +6,24 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClipEntry {
     pub id: u64,
+    /// The copied text; for an image a description ("Image 1920 × 1080").
     pub text: String,
     pub pinned: bool,
     /// Unix seconds when it was last copied.
     pub time: i64,
+    /// An image copy: path of the stored PNG in the daemon's data folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// An image copy: small preview as a `data:image/png;base64,…` URL.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub thumb: String,
+    /// An image copy: hash of its bytes, to notice the same image again.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub hash: u64,
+}
+
+fn is_zero(v: &u64) -> bool {
+    *v == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

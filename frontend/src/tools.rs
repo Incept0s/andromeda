@@ -147,8 +147,10 @@ fn ToolCard(
     }
 }
 
+/// Clipboard history, newest first (pinned on top), with a search box.
+/// `on_copy` runs after an entry was put back on the clipboard.
 #[component]
-fn Clipboard(view: RwSignal<View>) -> impl IntoView {
+fn ClipList(#[prop(optional)] on_copy: Option<Callback<()>>) -> impl IntoView {
     let query = RwSignal::new(String::new());
     let items = RwSignal::new(Vec::<ClipEntry>::new());
     let copied = RwSignal::new(None::<u64>);
@@ -166,24 +168,39 @@ fn Clipboard(view: RwSignal<View>) -> impl IntoView {
             }
         });
     };
-    poll(POLL_FAST, refresh);
+    refresh();
+    // The tool window stays loaded while hidden: refresh when it comes
+    // back instead of polling in the background.
+    let _ = window_event_listener(leptos::ev::focus, move |_| refresh());
+    if on_copy.is_none() {
+        poll(POLL_FAST, refresh);
+    }
     view! {
-        <Back view title="Clipboard" />
         <input class="search wide" type="search" placeholder="Search copied text"
             on:input=move |e| { query.set(event_target_value(&e)); refresh(); } />
         <Show when=move || !items.with(Vec::is_empty)
-            fallback=|| view! { <p class="muted small">"Copied text shows up here. It stays on this computer."</p> }>
-            <For each=move || items.get() key=|e| (e.id, e.pinned) let:e>
+            fallback=|| view! { <p class="muted small">"Copied text and images show up here. They stay on this computer."</p> }>
+            <For each=move || items.get() key=|e| (e.id, e.pinned, e.time) let:e>
                 <div class="clip" class:pinned=e.pinned>
                     <button class="cliptext" title="Copy" on:click=move |_| {
                         tauri::call("clipboard_copy", Id { id: e.id });
                         copied.set(Some(e.id));
+                        if let Some(f) = on_copy { f.run(()) }
                     }>
-                        {e.text.chars().take(240).collect::<String>()}
+                        {if e.thumb.is_empty() {
+                            view! { <span>{e.text.chars().take(240).collect::<String>()}</span> }.into_any()
+                        } else {
+                            view! {
+                                <span class="clipimage">
+                                    <img src=e.thumb.clone() alt="" />
+                                    <span class="muted small">{e.text.clone()}</span>
+                                </span>
+                            }.into_any()
+                        }}
                     </button>
                     <div class="clipactions">
                         <span class="small accent-text" class:hidden=move || copied.get() != Some(e.id)>"Copied"</span>
-                        <button class="iconbtn" title=if e.pinned { "Unpin" } else { "Pin" }
+                        <button class="iconbtn" title=if e.pinned { "Unpin" } else { "Pin (never removed automatically)" }
                             on:click=move |_| { tauri::call("clipboard_pin", Pin { id: e.id, pinned: !e.pinned }); refresh(); }>
                             {if e.pinned { "★" } else { "☆" }}
                         </button>
@@ -193,6 +210,32 @@ fn Clipboard(view: RwSignal<View>) -> impl IntoView {
             </For>
             <button class="btn small-btn" on:click=move |_| { tauri::call("clipboard_clear", ()); refresh(); }>"Clear history (keeps pinned)"</button>
         </Show>
+    }
+}
+
+#[component]
+fn Clipboard(view: RwSignal<View>) -> impl IntoView {
+    view! {
+        <Back view title="Clipboard" />
+        <ClipList />
+    }
+}
+
+/// The small window under the clipboard icon in the top bar: click an
+/// entry and it becomes the clipboard; the window closes so you can paste.
+#[component]
+pub fn ClipboardWindow() -> impl IntoView {
+    view! {
+        <main class="glass tool">
+            <header class="tool-head">
+                <Icon name="clipboard" />
+                <strong class="grow">"Clipboard"</strong>
+            </header>
+            <section class="content">
+                <ClipList on_copy=Callback::new(|_| tauri::call("hide", ())) />
+            </section>
+            <footer class="muted small tool-foot">"Click one to copy it, then paste where you like."</footer>
+        </main>
     }
 }
 

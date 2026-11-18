@@ -40,7 +40,7 @@ runs while it is open and quits a few minutes after you close it.
 | **Network** | Live speed, session totals, interfaces and addresses, apps with open connections, a speed test on demand |
 | **Disks** | Space per volume, read and write speed, drive health (SMART), eject |
 | **Energy** | Battery and power flow, power mode, mouse and headset batteries, the apps using the most CPU |
-| **Tools** | Clipboard history, copy text from the screen (OCR and QR codes), color picker, file converter, cleaner, packages (RPM and Flatpak), a shelf for files |
+| **Tools** | Clipboard history (text and images), copy text from the screen (OCR and QR codes), color picker, file converter, cleaner, packages (RPM and Flatpak), a shelf for files |
 | **Controls** | Quick switches for the app switcher and the background features |
 
 And outside the panel:
@@ -56,6 +56,9 @@ And outside the panel:
 - **A converter in the top bar** (optional, Settings → Top bar). Drop a file
   on the arrows icon to see what it can become: WebP, JPEG, MP3, GIF, PDF,
   smaller files. The result can go straight onto the shelf.
+- **Clipboard history in the top bar** (optional). Your last copied texts and
+  images (screenshots, "Copy image"), click one and it is your clipboard
+  again. Password-manager copies are never kept.
 - **Alt+Tab with large previews.** One live preview per window, minimized
   windows included, grouped by app.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:

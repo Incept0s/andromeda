@@ -292,6 +292,10 @@ fn main() {
             hide_on_escape();
             view! { <tools::ConvertWindow /> }
         }),
+        "#clipboard" => mount_to_body(|| {
+            hide_on_escape();
+            view! { <tools::ClipboardWindow /> }
+        }),
         _ => mount_to_body(Panel),
     }
 }

@@ -26,6 +26,7 @@ use zbus::{connection, interface};
 const TOOLS: &[(&str, &str, f64, f64)] = &[
     ("shelf", "Andromeda Shelf", 340.0, 440.0),
     ("convert", "Andromeda Converter", 360.0, 480.0),
+    ("clipboard", "Andromeda Clipboard", 360.0, 480.0),
 ];
 
 /// A file dropped on the converter icon, kept until the converter page
@@ -194,7 +195,7 @@ impl Panel {
         // An already loaded page gets it at once; a new one asks on load.
         let _ = self.app.emit_to("convert", "convert-file", path);
     }
-    /// Shows or hides a tool window by name ("shelf", "convert").
+    /// Shows or hides a tool window by name ("shelf", "convert", "clipboard").
     fn toggle_tool(&self, name: &str) {
         if TOOLS.iter().any(|t| t.0 == name) {
             toggle_window(&self.app, name);
