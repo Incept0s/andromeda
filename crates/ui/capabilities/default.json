@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Only what the bundled frontend needs: receive pushed events, drag the Settings window by its title bar. App commands (quit, open_settings) are allowed by default.",
-  "windows": ["main", "settings"],
+  "windows": ["main", "settings", "shelf"],
   "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-start-dragging"]
 }

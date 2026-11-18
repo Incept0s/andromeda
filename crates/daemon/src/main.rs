@@ -405,19 +405,47 @@ impl Daemon {
         self.clipboard.clear();
     }
 
-    /// Shelf contents as JSON (`Vec<tools::ShelfItem>`).
-    fn shelf_list(&self) -> String {
+    /// Shelf contents as JSON (`Vec<tools::ShelfItem>`), newest first.
+    /// Watched by the Shell extension (item count on the box icon) and the
+    /// shelf window.
+    #[zbus(property)]
+    fn shelf(&self) -> String {
         serde_json::to_string(&self.shelf.items).unwrap_or_default()
     }
 
-    fn shelf_add(&mut self, paths: Vec<String>) {
+    /// Same as the `Shelf` property, for callers that just want it once.
+    fn shelf_list(&self) -> String {
+        self.shelf()
+    }
+
+    /// Puts files on the shelf (absolute paths; others are ignored). Called
+    /// by the Shell extension when files are dropped on the box icon, and by
+    /// the panel when they are dropped on its window.
+    async fn shelf_add(
+        &mut self,
+        paths: Vec<String>,
+        #[zbus(signal_emitter)] e: SignalEmitter<'_>,
+    ) {
+        let now = unix_now();
+        let mut changed = false;
         for p in paths {
-            self.shelf.add(&p);
+            changed |= self.shelf.add(&p, now);
+        }
+        if changed {
+            let _ = self.shelf_changed(&e).await;
         }
     }
 
-    fn shelf_remove(&mut self, path: &str) {
-        self.shelf.remove(path);
+    async fn shelf_remove(&mut self, path: &str, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
+        if self.shelf.remove(path) {
+            let _ = self.shelf_changed(&e).await;
+        }
+    }
+
+    async fn shelf_clear(&mut self, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
+        if self.shelf.clear() {
+            let _ = self.shelf_changed(&e).await;
+        }
     }
 
     /// Whether the background service starts at login (systemd user unit).
@@ -504,7 +532,7 @@ async fn main() -> zbus::Result<()> {
         mixer_tx,
         max_volume,
         clipboard: clipboard::Clipboard::load(),
-        shelf: clipboard::Shelf::default(),
+        shelf: clipboard::Shelf::load(),
         jobs: Arc::new(jobs::Ctx {
             session: session.clone(),
             system: system.clone(),
@@ -624,6 +652,14 @@ async fn main() -> zbus::Result<()> {
             if bar != d.topbar {
                 d.topbar = bar;
                 let _ = d.top_bar_changed(iface.signal_emitter()).await;
+            }
+
+            // Once a minute: shelf items past their time, or whose file is gone.
+            if ticks % 60 == 1 {
+                let keep = d.config.shelf.keep_hours;
+                if d.shelf.prune(unix_now(), keep) {
+                    let _ = d.shelf_changed(iface.signal_emitter()).await;
+                }
             }
 
             if d.awake_tick().await {

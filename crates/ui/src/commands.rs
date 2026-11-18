@@ -31,6 +31,8 @@ pub trait Daemon {
     fn awake_until(&self) -> zbus::Result<i64>;
     #[zbus(property)]
     fn mixer(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn shelf(&self) -> zbus::Result<String>;
     fn metrics(&self) -> zbus::Result<Vec<(String, String, String, String)>>;
     fn history(&self) -> zbus::Result<HashMap<String, Vec<f64>>>;
     fn set_config(&self, json: &str) -> zbus::Result<()>;
@@ -58,6 +60,7 @@ pub trait Daemon {
     fn shelf_list(&self) -> zbus::Result<String>;
     fn shelf_add(&self, paths: &[&str]) -> zbus::Result<()>;
     fn shelf_remove(&self, path: &str) -> zbus::Result<()>;
+    fn shelf_clear(&self) -> zbus::Result<()>;
     fn panel_visible(&self, visible: bool) -> zbus::Result<()>;
     fn autostart(&self) -> zbus::Result<bool>;
     fn set_autostart(&self, on: bool) -> zbus::Result<()>;
@@ -333,6 +336,32 @@ pub async fn shelf_add(app: AppHandle, paths: Vec<String>) -> R<()> {
 #[tauri::command]
 pub async fn shelf_remove(app: AppHandle, path: String) -> R<()> {
     daemon(&app).await?.shelf_remove(&path).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn shelf_clear(app: AppHandle) -> R<()> {
+    daemon(&app).await?.shelf_clear().await.map_err(err)
+}
+
+/// GNOME's file chooser. The calling window stays open while it is up
+/// (it would otherwise hide when the dialog takes focus).
+#[tauri::command]
+pub async fn choose_files(
+    window: tauri::WebviewWindow,
+    title: String,
+    multiple: bool,
+) -> R<Vec<String>> {
+    let app = window.app_handle().clone();
+    crate::set_window_sticky(&app, window.label(), true);
+    let r = job(
+        &app,
+        "choose_files",
+        &[&title, if multiple { "multiple" } else { "single" }],
+    )
+    .await;
+    crate::set_window_sticky(&app, window.label(), false);
+    let _ = window.set_focus();
+    json(r?)
 }
 
 /// Puts the file on the clipboard so it can be pasted in Files.

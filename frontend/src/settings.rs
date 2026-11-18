@@ -51,7 +51,9 @@ impl Page {
         match self {
             Page::General => "login startup update version",
             Page::Features => "tabs enable disable on off switch",
-            Page::TopBar => "panel numbers metrics order temperature position left right vitals",
+            Page::TopBar => {
+                "panel numbers metrics order temperature position left right vitals icons shelf files"
+            }
             Page::Alerts => "notifications threshold warning",
             Page::Mixer => "volume boost audio sound hidden apps",
             Page::Awake => "sleep suspend battery timer caffeine",
@@ -193,6 +195,10 @@ fn TopBar() -> impl IntoView {
             .with(|c| c.as_ref().map_or(TopBarSide::Right, |c| c.topbar_side))
     };
     let set_side = move |s: TopBarSide| d.edit_config(|c| c.topbar_side = s);
+    let keep = move || {
+        d.config
+            .with(|c| c.as_ref().map_or(Some(24), |c| c.shelf.keep_hours))
+    };
 
     view! {
         <h2>"Top bar"</h2>
@@ -211,6 +217,21 @@ fn TopBar() -> impl IntoView {
         <Show when=move || { chosen().len() > TOPBAR_SOFT_LIMIT }>
             <p class="warn-text small">{format!("More than {TOPBAR_SOFT_LIMIT} items may not fit in the top bar.")}</p>
         </Show>
+        <h3 class="sub">"Tool icons"</h3>
+        <p class="muted small">"Extra icons between your open apps and the Andromeda icon. Each tool also stays in the panel's Tools tab."</p>
+        <Toggle label="Shelf" hint="A box: drop files on it, click it and drag them out again." get=|c| c.icons.shelf set=|c, v| c.icons.shelf = v />
+        <div class="setting">
+            <div class="grow">
+                <div>"Remove shelf files after"</div>
+                <div class="muted small">"Only the shelf entry goes; the file itself is never touched."</div>
+            </div>
+            <div class="chips">
+                {[(Some(1), "1 hour"), (Some(24), "24 hours"), (None, "Never")].into_iter().map(|(h, label)| view! {
+                    <button class="chip" class:sel=move || keep() == h on:click=move |_| d.edit_config(|c| c.shelf.keep_hours = h)>{label}</button>
+                }).collect_view()}
+            </div>
+        </div>
+        <h3 class="sub">"Numbers"</h3>
         <div class="order">
             {move || chosen().into_iter().enumerate().map(|(i, id)| {
                 let label = name(&id);

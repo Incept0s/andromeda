@@ -18,6 +18,10 @@ pub struct ShelfItem {
     pub name: String,
     pub is_dir: bool,
     pub size: f64,
+    /// Unix seconds when it was put on the shelf; it leaves after
+    /// `config.shelf.keep_hours`.
+    #[serde(default)]
+    pub added: i64,
 }
 
 /// One conversion the converter offers for a given input file.

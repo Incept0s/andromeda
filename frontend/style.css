@@ -83,6 +83,15 @@ input, select { text-shadow: none; }
 
 .panel { gap: var(--s3); padding: var(--s3) var(--s4) var(--s4); }
 
+/* Small windows under the top-bar tool icons (shelf, ...). */
+.tool { gap: var(--s2); padding: var(--s3) var(--s3) var(--s2); }
+.tool-head { display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding: 0 var(--s1); }
+.tool-head .btn.small-btn { margin-top: 0; }
+.tool-foot { padding: 0 var(--s1); }
+.grow-zone { flex: 1; justify-content: center; text-align: center; }
+.shelf-item { cursor: grab; border-radius: var(--r-control); padding-left: var(--s1); }
+.shelf-item:hover { background: var(--hover); }
+
 /* Light layer on the glass: cards, tab bar, buttons, fields. */
 .card, .tabs, .btn, .chip, .toolcard, .option, .order-item, .page > .setting {
   background: var(--layer);
@@ -376,6 +385,10 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .back { margin: 0; }
 .back .iconbtn { font-size: 20px; line-height: 1; }
 .dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
   padding: var(--s4);
   border-radius: var(--r-card);
   border: 1.5px dashed rgba(255, 255, 255, 0.22);

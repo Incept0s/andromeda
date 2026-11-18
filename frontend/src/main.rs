@@ -229,11 +229,7 @@ fn Panel() -> impl IntoView {
             },
         )
     });
-    let _ = window_event_listener(leptos::ev::keydown, |e| {
-        if e.key() == "Escape" {
-            tauri::call("hide", ());
-        }
-    });
+    hide_on_escape();
 
     view! {
         <main class="glass panel">
@@ -271,14 +267,27 @@ fn Panel() -> impl IntoView {
     }
 }
 
+/// Escape hides the window it is pressed in (panel or tool window).
+fn hide_on_escape() {
+    let _ = window_event_listener(leptos::ev::keydown, |e| {
+        if e.key() == "Escape" {
+            tauri::call("hide", ());
+        }
+    });
+}
+
+/// One page, several windows: the URL fragment says which one this is.
 fn main() {
-    let is_settings = window().location().hash().is_ok_and(|h| h == "#settings");
-    if is_settings {
-        mount_to_body(|| {
+    let hash = window().location().hash().unwrap_or_default();
+    match hash.as_str() {
+        "#settings" => mount_to_body(|| {
             provide_context(start_data());
             view! { <settings::Settings /> }
-        });
-    } else {
-        mount_to_body(Panel);
+        }),
+        "#shelf" => mount_to_body(|| {
+            hide_on_escape();
+            view! { <tools::ShelfWindow /> }
+        }),
+        _ => mount_to_body(Panel),
     }
 }

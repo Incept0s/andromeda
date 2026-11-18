@@ -3,11 +3,14 @@
 //! (`andromedad`) publishes over D-Bus and never reads the system itself.
 //!
 //! It also owns the D-Bus name `io.github.incept0s.Andromeda.Panel` so the
-//! Shell extension can toggle the panel. Wayland apps cannot place their own
-//! windows, so the extension moves the window under the top-bar icon.
+//! Shell extension can toggle the panel and the small tool windows (shelf,
+//! ...) that belong to the extra top-bar icons. Wayland apps cannot place
+//! their own windows, so the extension moves each window under its icon,
+//! recognising it by title.
 
 mod commands;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -17,14 +20,21 @@ use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use zbus::{connection, interface};
 
-/// When the panel was last shown, and when it last hid because it lost focus.
+/// Small glass windows opened from the top-bar tool icons:
+/// (label, title, width, height). The label is also the page
+/// (`index.html#<label>`); the title must match TOOL_TITLES in the extension.
+const TOOLS: &[(&str, &str, f64, f64)] = &[("shelf", "Andromeda Shelf", 340.0, 440.0)];
+
+/// Per window (panel or tool): when it was last shown, and when it last hid
+/// because it lost focus.
 #[derive(Default)]
 struct PanelTimes {
-    shown: Mutex<Option<Instant>>,
-    blur_hidden: Mutex<Option<Instant>>,
-    /// While true (Tools tab open) the panel stays when it loses focus, so
-    /// files can be dragged onto it from another window.
-    sticky: Mutex<bool>,
+    shown: Mutex<HashMap<String, Instant>>,
+    blur_hidden: Mutex<HashMap<String, Instant>>,
+    /// Windows that stay when they lose focus: the panel while the Tools
+    /// tab is open (files can be dragged onto it from another window), any
+    /// window while its file chooser is up.
+    sticky: Mutex<HashMap<String, bool>>,
 }
 
 /// Tells the daemon whether anyone is looking, so it can slow down
@@ -38,16 +48,22 @@ fn report_visible(app: &AppHandle, visible: bool) {
     });
 }
 
-pub fn hide_panel(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
+fn hide_window(app: &AppHandle, label: &str) {
+    if let Some(w) = app.get_webview_window(label) {
         let _ = w.hide();
     }
-    report_visible(app, false);
+    if label == "main" {
+        report_visible(app, false);
+    }
+}
+
+pub fn hide_panel(app: &AppHandle) {
+    hide_window(app, "main");
 }
 
 #[tauri::command]
-fn hide(app: AppHandle) {
-    hide_panel(&app);
+fn hide(window: tauri::WebviewWindow) {
+    hide_window(window.app_handle(), window.label());
 }
 
 #[tauri::command]
@@ -57,33 +73,71 @@ fn close_settings(app: AppHandle) {
     }
 }
 
-#[tauri::command]
-fn set_sticky(app: AppHandle, sticky: bool) {
+pub fn set_window_sticky(app: &AppHandle, label: &str, sticky: bool) {
     if let Ok(mut g) = app.state::<PanelTimes>().sticky.lock() {
-        *g = sticky;
+        g.insert(label.to_owned(), sticky);
+    }
+}
+
+#[tauri::command]
+fn set_sticky(window: tauri::WebviewWindow, sticky: bool) {
+    set_window_sticky(window.app_handle(), window.label(), sticky);
+}
+
+/// Shows the panel or a tool window, creating a tool window on first use.
+fn show_window(app: &AppHandle, label: &str) {
+    let w = match app.get_webview_window(label) {
+        Some(w) => w,
+        None => {
+            let Some(&(_, title, width, height)) = TOOLS.iter().find(|t| t.0 == label) else {
+                return;
+            };
+            // Same glass as the panel: no GTK frame, transparent, fixed size.
+            match WebviewWindowBuilder::new(
+                app,
+                label,
+                WebviewUrl::App(format!("index.html#{label}").into()),
+            )
+            .title(title)
+            .inner_size(width, height)
+            .decorations(false)
+            .transparent(true)
+            .resizable(false)
+            .skip_taskbar(true)
+            .theme(Some(tauri::Theme::Dark))
+            .build()
+            {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("andromeda: cannot open {label}: {e}");
+                    return;
+                }
+            }
+        }
+    };
+    if let Ok(mut g) = app.state::<PanelTimes>().shown.lock() {
+        g.insert(label.to_owned(), Instant::now());
+    }
+    let _ = w.show();
+    let _ = w.set_focus();
+    if label == "main" {
+        report_visible(app, true);
     }
 }
 
 fn show_panel(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        if let Ok(mut g) = app.state::<PanelTimes>().shown.lock() {
-            *g = Some(Instant::now());
-        }
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
-    report_visible(app, true);
+    show_window(app, "main");
 }
 
-fn toggle_panel(app: &AppHandle) {
-    let Some(w) = app.get_webview_window("main") else {
-        return;
-    };
-    if w.is_visible().unwrap_or(false) {
-        hide_panel(app);
+fn toggle_window(app: &AppHandle, label: &str) {
+    if app
+        .get_webview_window(label)
+        .is_some_and(|w| w.is_visible().unwrap_or(false))
+    {
+        hide_window(app, label);
         return;
     }
-    // A click on the top-bar icon can take focus from the panel first, which
+    // A click on the top-bar icon can take focus from the window first, which
     // hides it via the blur handler. Without this guard, that same click
     // would re-open it immediately.
     let recently = app
@@ -91,11 +145,15 @@ fn toggle_panel(app: &AppHandle) {
         .blur_hidden
         .lock()
         .ok()
-        .and_then(|g| *g);
+        .and_then(|g| g.get(label).copied());
     if recently.is_some_and(|t| t.elapsed() < Duration::from_millis(300)) {
         return;
     }
-    show_panel(app);
+    show_window(app, label);
+}
+
+fn toggle_panel(app: &AppHandle) {
+    toggle_window(app, "main");
 }
 
 /// Server side of the panel interface, called by the Shell extension.
@@ -113,6 +171,12 @@ impl Panel {
     }
     fn open_settings(&self) {
         let _ = open_settings(self.app.clone());
+    }
+    /// Shows or hides a tool window by name ("shelf").
+    fn toggle_tool(&self, name: &str) {
+        if TOOLS.iter().any(|t| t.0 == name) {
+            toggle_window(&self.app, name);
+        }
     }
 }
 
@@ -171,9 +235,10 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
         d.receive_values_changed().await,
         d.receive_mixer_changed().await,
     );
-    let (mut config, mut awake) = (
+    let (mut config, mut awake, mut shelf) = (
         d.receive_config_changed().await,
         d.receive_awake_until_changed().await,
+        d.receive_shelf_changed().await,
     );
     loop {
         tokio::select! {
@@ -194,6 +259,11 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
             Some(c) = awake.next() => if let Ok(v) = c.get().await {
                 let _ = app.emit("awake", v);
             },
+            Some(c) = shelf.next() => if let Ok(s) = c.get().await
+                && let Ok(items) = serde_json::from_str::<Vec<andromeda_core::tools::ShelfItem>>(&s)
+            {
+                let _ = app.emit("shelf", items);
+            },
             else => break,
         }
     }
@@ -209,12 +279,11 @@ async fn exit_when_idle(app: AppHandle) {
     let mut hidden_checks = 0;
     loop {
         tokio::time::sleep(CHECK).await;
-        let visible = |label| {
-            app.get_webview_window(label)
-                .and_then(|w| w.is_visible().ok())
-                .unwrap_or(false)
-        };
-        if visible("main") || visible("settings") {
+        let any_visible = app
+            .webview_windows()
+            .values()
+            .any(|w| w.is_visible().unwrap_or(false));
+        if any_visible {
             hidden_checks = 0;
         } else {
             hidden_checks += 1;
@@ -253,7 +322,9 @@ fn main() {
             commands::shelf_list,
             commands::shelf_add,
             commands::shelf_remove,
+            commands::shelf_clear,
             commands::shelf_copy,
+            commands::choose_files,
             commands::ocr,
             commands::pick_color,
             commands::convert_options,
@@ -292,36 +363,40 @@ fn main() {
             commands::open_releases,
         ])
         .on_window_event(|window, event| {
-            if window.label() != "main" {
+            let label = window.label();
+            if label != "main" && !TOOLS.iter().any(|t| t.0 == label) {
                 return;
             }
             match event {
-                // Closing the panel hides it; only Quit exits.
+                // Closing the panel or a tool window hides it; only Quit exits.
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    hide_panel(window.app_handle());
+                    hide_window(window.app_handle(), label);
                 }
                 // Behave like a popup: clicking elsewhere hides it.
                 WindowEvent::Focused(false) => {
                     let times = window.state::<PanelTimes>();
                     // Right after showing, Mutter can focus the window and
                     // take focus back within a second (seen when launched
-                    // from a terminal). Hiding then would make the panel
+                    // from a terminal). Hiding then would make the window
                     // vanish before the user sees it.
                     let just_shown = times
                         .shown
                         .lock()
                         .ok()
-                        .and_then(|g| *g)
+                        .and_then(|g| g.get(label).copied())
                         .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
-                    let sticky = times.sticky.lock().is_ok_and(|g| *g);
+                    let sticky = times
+                        .sticky
+                        .lock()
+                        .is_ok_and(|g| g.get(label).copied().unwrap_or(false));
                     if just_shown || sticky || !window.is_visible().unwrap_or(false) {
                         return;
                     }
                     if let Ok(mut g) = times.blur_hidden.lock() {
-                        *g = Some(Instant::now());
+                        g.insert(label.to_owned(), Instant::now());
                     }
-                    hide_panel(window.app_handle());
+                    hide_window(window.app_handle(), label);
                 }
                 _ => {}
             }

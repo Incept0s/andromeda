@@ -48,6 +48,11 @@ And outside the panel:
 - **Numbers in the top bar.** Plain text, no graphs, e.g. `CPU 42°  RAM 61%  12W`.
   Choose and order them in Settings → Top bar, and put them right of the
   clock or at the far left of the bar.
+- **A shelf in the top bar.** Drag files from any app onto the box icon to
+  park them; click the box and drag them out again into Files, a browser or
+  a chat. Files leave the shelf after 24 hours (or 1 hour, or never), and a
+  Clear button empties it. The shelf only links to your files, it never
+  copies or moves them.
 - **Alt+Tab with large previews.** One live preview per window, minimized
   windows included, grouped by app.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:
@@ -126,8 +131,9 @@ under the icon; click anywhere else or press **Escape** to close it.
   system check.
 - **Quit** (bottom right) stops Andromeda completely, background service
   included. It starts again the next time you open the panel or log in.
-- **Drop files on the panel** while the Tools tab is open: they land on the
-  shelf, or in the converter when it is open.
+- **Drop files on the box icon** in the top bar to put them on the shelf, or
+  on the panel while the Tools tab is open (they go to the converter when it
+  is open). "Choose files…" works too when dragging is not handy.
 - **Alt+Tab** shows the window switcher while it is switched on. Hold Alt,
   press Tab to move, W to close a window, release to switch.
 
@@ -244,8 +250,7 @@ machine; some tools have not met much real hardware yet.
 
 Known limits: Linux has no per-app energy figure, so the Energy tab ranks
 apps by CPU use; per-app network traffic needs root, so the Network tab
-counts open connections; files can be dropped onto the shelf but not dragged
-back out yet.
+counts open connections.
 
 ## Contributing
 

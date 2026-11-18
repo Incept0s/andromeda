@@ -18,6 +18,9 @@ extern "C" {
         event: &str,
         handler: &Closure<dyn FnMut(JsValue)>,
     ) -> Result<JsValue, JsValue>;
+    /// The page's own webview (`@tauri-apps/api/webview`).
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "webview"], js_name = getCurrentWebview)]
+    fn current_webview() -> JsValue;
 }
 
 pub fn spawn(f: impl Future<Output = ()> + 'static) {
@@ -64,6 +67,43 @@ pub fn listen<T: DeserializeOwned + 'static>(event: &'static str, mut f: impl Fn
             }
         });
         let _ = listen_js(event, &handler).await;
+        handler.forget();
+    });
+}
+
+/// Files dropped on this window (not on another Andromeda window: plain
+/// `listen` would hear every window's drops). Uses the webview's own
+/// `onDragDropEvent`; only the final "drop" is passed on.
+pub fn on_file_drop(mut f: impl FnMut(Vec<String>) + 'static) {
+    spawn(async move {
+        let handler = Closure::new(move |e: JsValue| {
+            let Ok(payload) = js_sys::Reflect::get(&e, &"payload".into()) else {
+                return;
+            };
+            let kind = js_sys::Reflect::get(&payload, &"type".into())
+                .ok()
+                .and_then(|t| t.as_string());
+            if kind.as_deref() != Some("drop") {
+                return;
+            }
+            let paths = js_sys::Reflect::get(&payload, &"paths".into())
+                .ok()
+                .and_then(|p| serde_wasm_bindgen::from_value::<Vec<String>>(p).ok())
+                .unwrap_or_default();
+            if !paths.is_empty() {
+                f(paths);
+            }
+        });
+        let webview = current_webview();
+        let subscribe = js_sys::Reflect::get(&webview, &"onDragDropEvent".into())
+            .ok()
+            .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
+        if let Some(subscribe) = subscribe
+            && let Ok(promise) = subscribe.call1(&webview, handler.as_ref())
+            && let Ok(promise) = promise.dyn_into::<js_sys::Promise>()
+        {
+            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+        }
         handler.forget();
     });
 }

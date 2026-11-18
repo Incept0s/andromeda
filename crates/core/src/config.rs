@@ -18,6 +18,9 @@ pub struct Config {
     pub topbar: Option<Vec<String>>,
     /// Which side of the top bar the numbers sit on.
     pub topbar_side: TopBarSide,
+    /// Extra top-bar icons for tools (right of the open apps).
+    pub icons: Icons,
+    pub shelf: Shelf,
     pub alerts: Alerts,
     pub mixer: Mixer,
     pub awake: Awake,
@@ -56,6 +59,37 @@ impl Default for Features {
             topbar: true,
             clipboard: true,
             switcher: true,
+        }
+    }
+}
+
+/// Tool icons the Shell extension shows in the top bar, between the open
+/// apps and the Andromeda icon. Each tool also stays in the Tools tab.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Icons {
+    /// Box icon: drop files on it to park them, click it to get them back.
+    pub shelf: bool,
+}
+
+impl Default for Icons {
+    fn default() -> Self {
+        Self { shelf: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Shelf {
+    /// Files leave the shelf this many hours after they were added;
+    /// `None` = they stay until removed.
+    pub keep_hours: Option<u32>,
+}
+
+impl Default for Shelf {
+    fn default() -> Self {
+        Self {
+            keep_hours: Some(24),
         }
     }
 }
@@ -174,6 +208,9 @@ impl Config {
             *b = (*b).clamp(1, 99);
         }
         self.awake.default_minutes = self.awake.default_minutes.min(24 * 60);
+        if let Some(h) = &mut self.shelf.keep_hours {
+            *h = (*h).clamp(1, 24 * 30);
+        }
         self.alerts.cooldown_minutes = self.alerts.cooldown_minutes.clamp(1, 24 * 60);
         self.alerts
             .rules
@@ -232,6 +269,8 @@ mod tests {
         assert!(c.features.mixer);
         assert_eq!(c.alerts.cooldown_minutes, 15);
         assert_eq!(c.topbar_side, TopBarSide::Right);
+        assert!(c.icons.shelf);
+        assert_eq!(c.shelf.keep_hours, Some(24));
         let left: Config = serde_json::from_str(r#"{"topbar_side":"Left"}"#).unwrap();
         assert_eq!(left.topbar_side, TopBarSide::Left);
     }

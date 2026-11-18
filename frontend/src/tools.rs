@@ -2,7 +2,11 @@
 //! Tools tab: a list of tools like the original's Utilities; each opens a
 //! sub-view with a back button. Files dropped on the panel go to the
 //! converter when it is open, otherwise to the shelf.
+//!
+//! Also the small tool windows opened from the top-bar icons
+//! (`ShelfWindow`), which reuse the same pieces.
 
+use andromeda_core::config::Config;
 use andromeda_core::metrics::format_bytes;
 use andromeda_core::tools::{CleanItem, ClipEntry, ConvertOption, Package, PkgSource, ShelfItem};
 use leptos::prelude::*;
@@ -20,11 +24,6 @@ enum View {
     Cleaner,
     Packages,
     Shelf,
-}
-
-#[derive(serde::Deserialize)]
-struct Drop {
-    paths: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -67,6 +66,42 @@ struct Action {
     source: &'static str,
     action: &'static str,
     id: String,
+}
+
+#[derive(Serialize)]
+struct Choose {
+    title: &'static str,
+    multiple: bool,
+}
+
+/// `file://` URI for a path, escaping everything but unreserved bytes and '/'.
+fn file_uri(path: &str) -> String {
+    let mut out = String::from("file://");
+    for b in path.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~/".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn now_secs() -> i64 {
+    (js_sys::Date::now() / 1000.0) as i64
+}
+
+/// "23 h left", "40 min left"; empty when files never expire.
+fn time_left(added: i64, keep_hours: Option<u32>) -> String {
+    let Some(h) = keep_hours else {
+        return String::new();
+    };
+    let left = (added + i64::from(h) * 3600 - now_secs()).max(0);
+    if left >= 3600 {
+        format!("{} h left", left / 3600)
+    } else {
+        format!("{} min left", (left / 60).max(1))
+    }
 }
 
 fn file_name(p: &str) -> String {
@@ -451,32 +486,43 @@ fn Packages(view: RwSignal<View>) -> impl IntoView {
     }
 }
 
+/// Shelf items. Each row can be dragged out into Files, a browser or any
+/// app that takes files (a copy: the original stays where it is).
 #[component]
-fn Shelf(
-    view: RwSignal<View>,
+fn ShelfList(
     items: RwSignal<Vec<ShelfItem>>,
-    refresh: Callback<()>,
-    convert: Callback<String>,
+    keep_hours: Signal<Option<u32>>,
+    #[prop(optional)] convert: Option<Callback<String>>,
 ) -> impl IntoView {
     view! {
-        <Back view title="Shelf" />
-        <div class="dropzone"><span class="muted">"Drop files here to keep them handy"</span></div>
-        <For each=move || items.get() key=|i| i.path.clone() let:i>
+        <For each=move || items.get() key=|i| (i.path.clone(), i.added) let:i>
             {
                 let (p1, p2, p3, p4) = (i.path.clone(), i.path.clone(), i.path.clone(), i.path.clone());
+                let drag_path = i.path.clone();
+                let detail = if i.is_dir { "Folder".to_owned() } else { format_bytes(i.size) };
+                let added = i.added;
                 view! {
-                    <div class="pkg">
+                    <div class="pkg shelf-item" draggable="true" title="Drag into another app"
+                        on:dragstart=move |e: leptos::ev::DragEvent| {
+                            if let Some(dt) = e.data_transfer() {
+                                let _ = dt.set_data("text/uri-list", &file_uri(&drag_path));
+                                let _ = dt.set_data("text/plain", &drag_path);
+                                dt.set_effect_allowed("copy");
+                            }
+                        }>
                         <div class="grow">
                             <div class="ellipsis"><strong>{i.name.clone()}</strong></div>
-                            <div class="muted small">{if i.is_dir { "Folder".into() } else { format_bytes(i.size) }}</div>
+                            <div class="muted small">
+                                {detail.clone()}
+                                {move || { let t = time_left(added, keep_hours.get()); (!t.is_empty()).then(|| format!(" · {t}")) }}
+                            </div>
                         </div>
                         <button class="iconbtn" title="Open" on:click=move |_| tauri::call("open_file", PathArg { path: p1.clone() })>"↗"</button>
                         <button class="iconbtn" title="Copy (paste in Files)" on:click=move |_| tauri::call("shelf_copy", PathArg { path: p2.clone() })>"⧉"</button>
-                        <button class="iconbtn" title="Convert" on:click=move |_| convert.run(p3.clone())>"⇄"</button>
-                        <button class="iconbtn" title="Remove from shelf" on:click=move |_| {
-                            tauri::call("shelf_remove", PathArg { path: p4.clone() });
-                            refresh.run(());
-                        }>"✕"</button>
+                        {convert.map(|c| view! {
+                            <button class="iconbtn" title="Convert" on:click=move |_| c.run(p3.clone())>"⇄"</button>
+                        })}
+                        <button class="iconbtn" title="Remove from shelf" on:click=move |_| tauri::call("shelf_remove", PathArg { path: p4.clone() })>"✕"</button>
                     </div>
                 }
             }
@@ -484,27 +530,111 @@ fn Shelf(
     }
 }
 
+/// Opens GNOME's file chooser and puts the chosen files on the shelf.
+fn choose_for_shelf() {
+    tauri::spawn(async move {
+        if let Ok(paths) = tauri::invoke::<_, Vec<String>>(
+            "choose_files",
+            &Choose {
+                title: "Put files on the shelf",
+                multiple: true,
+            },
+        )
+        .await
+        {
+            tauri::call("shelf_add", Paths { paths });
+        }
+    });
+}
+
+/// Live shelf contents and the expiry setting, following daemon events.
+fn shelf_state() -> (RwSignal<Vec<ShelfItem>>, RwSignal<Option<u32>>) {
+    let items = RwSignal::new(Vec::<ShelfItem>::new());
+    let keep = RwSignal::new(Some(24));
+    tauri::spawn(async move {
+        if let Some(v) = tauri::get("shelf_list").await {
+            items.set(v);
+        }
+        if let Some(c) = tauri::get::<Config>("config").await {
+            keep.set(c.shelf.keep_hours);
+        }
+    });
+    tauri::listen::<Vec<ShelfItem>>("shelf", move |v| items.set(v));
+    tauri::listen::<Config>("config", move |c| keep.set(c.shelf.keep_hours));
+    (items, keep)
+}
+
+fn keep_text(keep: Option<u32>) -> String {
+    match keep {
+        Some(1) => "Files leave the shelf after 1 hour.".into(),
+        Some(h) => format!("Files leave the shelf after {h} hours."),
+        None => "Files stay until you remove them.".into(),
+    }
+}
+
+#[component]
+fn Shelf(
+    view: RwSignal<View>,
+    items: RwSignal<Vec<ShelfItem>>,
+    keep: RwSignal<Option<u32>>,
+    convert: Callback<String>,
+) -> impl IntoView {
+    view! {
+        <Back view title="Shelf" />
+        <div class="dropzone">
+            <span class="muted">"Drop files here or on the box icon in the top bar"</span>
+            <button class="btn small-btn" on:click=|_| choose_for_shelf()>"Choose files…"</button>
+        </div>
+        <ShelfList items keep_hours=keep.into() convert />
+        <Show when=move || !items.with(Vec::is_empty)>
+            <button class="btn small-btn" on:click=|_| tauri::call("shelf_clear", ())>"Clear shelf"</button>
+        </Show>
+        <p class="muted small">{move || keep_text(keep.get())}</p>
+    }
+}
+
+/// The small window under the box icon in the top bar.
+#[component]
+pub fn ShelfWindow() -> impl IntoView {
+    let (items, keep) = shelf_state();
+    tauri::on_file_drop(|paths| tauri::call("shelf_add", Paths { paths }));
+    let empty = move || items.with(Vec::is_empty);
+    view! {
+        <main class="glass tool">
+            <header class="tool-head">
+                <Icon name="package" />
+                <strong class="grow">"Shelf"</strong>
+                <button class="btn small-btn" title="Choose files to put on the shelf" on:click=|_| choose_for_shelf()>"Add…"</button>
+                <button class="btn small-btn" disabled=empty on:click=|_| tauri::call("shelf_clear", ())>"Clear"</button>
+            </header>
+            <section class="content">
+                <Show when=move || !empty()
+                    fallback=|| view! {
+                        <div class="dropzone grow-zone">
+                            <span>"Drop files on the box icon"</span>
+                            <span class="muted small">"or here, to keep them handy. Drag them out again into any app."</span>
+                        </div>
+                    }>
+                    <ShelfList items keep_hours=keep.into() />
+                </Show>
+            </section>
+            <footer class="muted small tool-foot">{move || keep_text(keep.get())}</footer>
+        </main>
+    }
+}
+
 #[component]
 pub fn ToolsTab() -> impl IntoView {
     let view = RwSignal::new(View::List);
     let file = RwSignal::new(None::<String>);
-    let shelf = RwSignal::new(Vec::<ShelfItem>::new());
-    let refresh_shelf = Callback::new(move |_| {
-        tauri::spawn(async move {
-            if let Some(v) = tauri::get("shelf_list").await {
-                shelf.set(v);
-            }
-        });
-    });
-    refresh_shelf.run(());
+    let (shelf, keep) = shelf_state();
     // Files dropped anywhere on the panel.
-    tauri::listen::<Drop>("tauri://drag-drop", move |d| {
+    tauri::on_file_drop(move |paths| {
         if view.get_untracked() == View::Convert {
-            file.set(d.paths.into_iter().next());
+            file.set(paths.into_iter().next());
         } else {
-            tauri::call("shelf_add", Paths { paths: d.paths });
+            tauri::call("shelf_add", Paths { paths });
             view.set(View::Shelf);
-            refresh_shelf.run(());
         }
     });
     let to_convert = Callback::new(move |p: String| {
@@ -529,7 +659,7 @@ pub fn ToolsTab() -> impl IntoView {
             View::Convert => view! { <Convert view file /> }.into_any(),
             View::Cleaner => view! { <Cleaner view /> }.into_any(),
             View::Packages => view! { <Packages view /> }.into_any(),
-            View::Shelf => view! { <Shelf view items=shelf refresh=refresh_shelf convert=to_convert /> }.into_any(),
+            View::Shelf => view! { <Shelf view items=shelf keep convert=to_convert /> }.into_any(),
         }}
     }
 }

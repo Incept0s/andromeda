@@ -2,7 +2,8 @@
 //
 // Andromeda top-bar button. Deliberately thin: it draws an icon, forwards
 // clicks to the panel over D-Bus, and moves the panel window under the icon,
-// because Wayland apps cannot position their own windows.
+// because Wayland apps cannot position their own windows. The tool icons
+// (shelf, ...) live in tools.js.
 //
 // Clipboard: Mutter offers no clipboard-manager protocol, so only code
 // inside the Shell sees copies made in other apps. This file forwards
@@ -20,6 +21,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import * as Switcher from './switcher.js';
+import {ToolIcons} from './tools.js';
 
 const PANEL_NAME = 'io.github.incept0s.Andromeda.Panel';
 const PANEL_PATH = '/io/github/incept0s/Andromeda/Panel';
@@ -99,6 +101,8 @@ export default class AndromedaExtension extends Extension {
         });
         Main.panel.addToStatusArea(`${this.uuid}-numbers`, this._vitals);
 
+        this._tools = new ToolIcons(this.uuid);
+
         this._side = 'Right';
         this._layout();
         // Other extensions (tray icons) add items later; put ours back in place.
@@ -131,6 +135,8 @@ export default class AndromedaExtension extends Extension {
                     this._setText(changed.TopBar.deep_unpack());
                 if ('Config' in changed)
                     this._applyConfig(changed.Config.deep_unpack());
+                if ('Shelf' in changed)
+                    this._tools?.setShelf(changed.Shelf.deep_unpack());
             });
         // Fetch the current text when the daemon appears; clear it when it goes.
         // Without the daemon, Alt+Tab stays GNOME's own (fail safe).
@@ -138,6 +144,7 @@ export default class AndromedaExtension extends Extension {
             () => this._fetchState(), () => {
                 this._setText('');
                 this._setSwitcher(false);
+                this._tools?.applyConfig(null);
             });
     }
 
@@ -158,6 +165,8 @@ export default class AndromedaExtension extends Extension {
             GLib.source_remove(this._layoutId);
         this._layoutId = 0;
         this._label = null;
+        this._tools.destroy();
+        this._tools = null;
         this._vitals.destroy();
         this._vitals = null;
         this._button.destroy();
@@ -166,7 +175,7 @@ export default class AndromedaExtension extends Extension {
 
     /**
      * Top-bar order, left to right in the right half of the bar:
-     *   [numbers] [open apps / tray icons] [Andromeda] [system icons]
+     *   [numbers] [open apps / tray icons] [tool icons] [Andromeda] [system icons]
      * With topbar_side = Left the numbers move to the end of the left box
      * (after Activities or an app menu) instead.
      */
@@ -174,7 +183,8 @@ export default class AndromedaExtension extends Extension {
         if (!this._button)
             return;
         const right = Main.panel._rightBox;
-        placeBefore(right, this._button.container, firstSystemItem(right));
+        for (const c of [...this._tools.containers, this._button.container])
+            placeBefore(right, c, firstSystemItem(right));
         if (this._side === 'Left')
             placeBefore(Main.panel._leftBox, this._vitals.container, null);
         else
@@ -243,9 +253,10 @@ export default class AndromedaExtension extends Extension {
             });
         get('TopBar', t => this._setText(t));
         get('Config', c => this._applyConfig(c));
+        get('Shelf', s => this._tools?.setShelf(s));
     }
 
-    /** Only the switcher switch and the numbers' side are read from the settings JSON. */
+    /** Read from the settings JSON: the switcher switch, the numbers' side, the tool icons. */
     _applyConfig(json) {
         let c = {};
         try {
@@ -255,6 +266,7 @@ export default class AndromedaExtension extends Extension {
         }
         this._setSwitcher(c.features?.switcher === true);
         this._side = c.topbar_side === 'Left' ? 'Left' : 'Right';
+        this._tools.applyConfig(c);
         this._layout();
     }
 
@@ -303,14 +315,20 @@ export default class AndromedaExtension extends Extension {
             win.disconnect(id);
             if (!this._button || !this._isAndromeda(win))
                 return;
-            if (win.get_title() === PANEL_TITLE)
-                this._place(win);
+            const title = win.get_title();
+            // A tool window goes under its icon, or under ours if that is hidden.
+            const tool = this._tools.buttonForTitle(title);
+            if (title === PANEL_TITLE)
+                this._place(win, this._button);
+            else if (tool)
+                this._place(win, tool.visible ? tool : this._button);
         });
     }
 
-    _place(win) {
-        const [bx, by] = this._button.get_transformed_position();
-        const [bw, bh] = this._button.get_transformed_size();
+    /** Under `button`, centred, clamped to the screen. */
+    _place(win, button) {
+        const [bx, by] = button.get_transformed_position();
+        const [bw, bh] = button.get_transformed_size();
         const frame = win.get_frame_rect();
         const work = Main.layoutManager.getWorkAreaForMonitor(Main.layoutManager.primaryIndex);
         // Centre under the icon, clamped to the screen.

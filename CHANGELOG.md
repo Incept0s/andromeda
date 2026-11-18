@@ -6,6 +6,14 @@ All notable changes to Andromeda are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Shelf icon in the top bar (a box, on by default): drop files on it, click
+  it to open a small shelf window and drag files out again. Items leave
+  after 24 hours (Settings → Top bar: 1 hour, 24 hours or never), a Clear
+  button empties the shelf, and it survives a logout.
+- "Choose files…" (GNOME's file chooser) for the shelf.
+
 ### Changed
 
 - Top bar: the numbers are their own item and can sit right of the clock

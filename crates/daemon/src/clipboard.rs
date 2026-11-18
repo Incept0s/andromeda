@@ -5,6 +5,10 @@
 //! forwards copied text here (it reads nothing else and stores nothing).
 //! The history is saved to `~/.local/share/io.github.incept0s.Andromeda/
 //! clipboard.json`, readable by the user only.
+//!
+//! The shelf keeps links to files (paths, never copies) in `shelf.json`
+//! next to it, so it survives a logout. Items leave after the configured
+//! number of hours, or as soon as the file is gone.
 
 use std::fs;
 use std::io::Write;
@@ -27,6 +31,25 @@ pub fn data_dir() -> Option<PathBuf> {
     Some(base.join(APP_ID))
 }
 
+/// Writes `value` as JSON to `name` in the data dir, atomically and with
+/// mode 0600: clipboards and file lists hold private things.
+fn write_private<T: serde::Serialize + ?Sized>(name: &str, value: &T) {
+    let Some(dir) = data_dir() else { return };
+    let _ = fs::create_dir_all(&dir);
+    let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+    let tmp = dir.join(format!("{name}.tmp"));
+    let ok = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)
+        .and_then(|mut f| f.write_all(serde_json::to_string(value).unwrap_or_default().as_bytes()));
+    if ok.is_ok() {
+        let _ = fs::rename(tmp, dir.join(name));
+    }
+}
+
 #[derive(Default)]
 pub struct Clipboard {
     pub entries: Vec<ClipEntry>,
@@ -43,28 +66,8 @@ impl Clipboard {
         Self { entries, next_id }
     }
 
-    /// Writes with mode 0600: clipboards hold private things.
     fn save(&self) {
-        let Some(dir) = data_dir() else { return };
-        let _ = fs::create_dir_all(&dir);
-        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
-        let tmp = dir.join("clipboard.json.tmp");
-        let ok = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)
-            .and_then(|mut f| {
-                f.write_all(
-                    serde_json::to_string(&self.entries)
-                        .unwrap_or_default()
-                        .as_bytes(),
-                )
-            });
-        if ok.is_ok() {
-            let _ = fs::rename(tmp, dir.join("clipboard.json"));
-        }
+        write_private("clipboard.json", &self.entries);
     }
 
     /// Adds a copy. Copying the same text again moves it to the top.
@@ -133,28 +136,78 @@ pub struct Shelf {
 }
 
 impl Shelf {
-    pub fn add(&mut self, path: &str) -> bool {
+    pub fn load() -> Self {
+        let items = data_dir()
+            .and_then(|d| fs::read_to_string(d.join("shelf.json")).ok())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default();
+        Self { items }
+    }
+
+    fn save(&self) {
+        write_private("shelf.json", &self.items);
+    }
+
+    /// Adds a file or folder by absolute path. Adding one that is already
+    /// there moves it to the top and restarts its timer.
+    pub fn add(&mut self, path: &str, now: i64) -> bool {
         let p = std::path::Path::new(path);
+        if !p.is_absolute() {
+            return false;
+        }
         let Ok(meta) = fs::metadata(p) else {
             return false;
         };
-        if !p.is_absolute() || self.items.iter().any(|i| i.path == path) {
-            return false;
-        }
-        self.items.push(ShelfItem {
-            path: path.to_owned(),
-            name: p
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.to_owned()),
-            is_dir: meta.is_dir(),
-            size: meta.len() as f64,
-        });
+        self.items.retain(|i| i.path != path);
+        self.items.insert(
+            0,
+            ShelfItem {
+                path: path.to_owned(),
+                name: p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.to_owned()),
+                is_dir: meta.is_dir(),
+                size: meta.len() as f64,
+                added: now,
+            },
+        );
+        self.save();
         true
     }
 
-    pub fn remove(&mut self, path: &str) {
+    pub fn remove(&mut self, path: &str) -> bool {
+        let before = self.items.len();
         self.items.retain(|i| i.path != path);
+        let changed = self.items.len() != before;
+        if changed {
+            self.save();
+        }
+        changed
+    }
+
+    pub fn clear(&mut self) -> bool {
+        let changed = !self.items.is_empty();
+        self.items.clear();
+        if changed {
+            self.save();
+        }
+        changed
+    }
+
+    /// Drops items older than `keep_hours` (`None` = keep) and items whose
+    /// file no longer exists. Returns true if anything was dropped.
+    pub fn prune(&mut self, now: i64, keep_hours: Option<u32>) -> bool {
+        let before = self.items.len();
+        self.items.retain(|i| {
+            let fresh = keep_hours.is_none_or(|h| now - i.added < i64::from(h) * 3600);
+            fresh && std::path::Path::new(&i.path).exists()
+        });
+        let changed = self.items.len() != before;
+        if changed {
+            self.save();
+        }
+        changed
     }
 }
 
@@ -195,5 +248,36 @@ mod tests {
         assert_eq!(c.entries.iter().filter(|e| !e.pinned).count(), MAX_ENTRIES);
         c.clear();
         assert_eq!(c.entries.len(), 1);
+    }
+
+    #[test]
+    fn shelf_expires_and_forgets_missing_files() {
+        let dir = std::env::temp_dir().join(format!("andromeda-shelf-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        unsafe { std::env::set_var("XDG_DATA_HOME", dir.join("data")) };
+        let (a, b) = (dir.join("a.txt"), dir.join("b.txt"));
+        fs::write(&a, "a").unwrap();
+        fs::write(&b, "b").unwrap();
+        let (a, b) = (a.to_str().unwrap(), b.to_str().unwrap());
+
+        let mut s = Shelf::default();
+        assert!(!s.add("relative/path", 0), "relative paths are refused");
+        assert!(!s.add("/does/not/exist", 0));
+        assert!(s.add(a, 0));
+        assert!(s.add(b, 3600 * 20));
+        assert!(s.add(a, 3600 * 10), "re-adding moves to the top");
+        assert_eq!(s.items.len(), 2);
+        assert_eq!(s.items[0].path, a);
+
+        // 25 h after start: b (added at 20 h) stays, a (re-added at 10 h) stays.
+        assert!(!s.prune(3600 * 25, Some(24)));
+        // 35 h: a is 25 h old and goes.
+        assert!(s.prune(3600 * 35, Some(24)));
+        assert_eq!(s.items.len(), 1);
+        // Never expire, but a deleted file still goes.
+        fs::remove_file(b).unwrap();
+        assert!(s.prune(i64::MAX / 2, None));
+        assert!(s.items.is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

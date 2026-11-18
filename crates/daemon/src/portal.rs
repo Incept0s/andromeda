@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! XDG desktop portal requests: interactive screenshot (for OCR) and the
-//! color picker. GNOME shows its own UI for both; the result comes back
+//! XDG desktop portal requests: interactive screenshot (for OCR), the
+//! color picker and the file chooser. GNOME shows its own UI for both; the result comes back
 //! asynchronously as a `Response` signal on a per-request object, so we
 //! subscribe to that signal before making the call.
 
@@ -22,6 +22,28 @@ async fn request(
     conn: &zbus::Connection,
     interface: &str,
     method: &str,
+    options: HashMap<&str, zbus::Variant<'_>>,
+) -> Result<HashMap<String, OwnedVariant>, String> {
+    call(conn, interface, method, None, options).await
+}
+
+/// Like `request`, for methods that take a title after the parent window
+/// (`FileChooser.OpenFile(parent, title, options)`).
+async fn request_titled(
+    conn: &zbus::Connection,
+    interface: &str,
+    method: &str,
+    title: &str,
+    options: HashMap<&str, zbus::Variant<'_>>,
+) -> Result<HashMap<String, OwnedVariant>, String> {
+    call(conn, interface, method, Some(title), options).await
+}
+
+async fn call(
+    conn: &zbus::Connection,
+    interface: &str,
+    method: &str,
+    title: Option<&str>,
     mut options: HashMap<&str, zbus::Variant<'_>>,
 ) -> Result<HashMap<String, OwnedVariant>, String> {
     let token = format!("andromeda{}", COUNTER.fetch_add(1, Ordering::Relaxed));
@@ -45,9 +67,17 @@ async fn request(
         .map_err(|e| e.to_string())?;
 
     options.insert("handle_token", zbus::Variant::from(token.as_str()));
-    conn.call_method(Some(DEST), PATH, Some(interface), method, &("", options))
-        .await
-        .map_err(|e| e.to_string())?;
+    match title {
+        Some(t) => {
+            conn.call_method(Some(DEST), PATH, Some(interface), method, &("", t, options))
+                .await
+        }
+        None => {
+            conn.call_method(Some(DEST), PATH, Some(interface), method, &("", options))
+                .await
+        }
+    }
+    .map_err(|e| e.to_string())?;
 
     let msg = stream
         .next()
@@ -59,7 +89,7 @@ async fn request(
     match code {
         0 => Ok(results),
         1 => Err("Cancelled".into()),
-        _ => Err("The screenshot could not be taken".into()),
+        _ => Err("The request failed".into()),
     }
 }
 
@@ -96,6 +126,37 @@ pub async fn pick_color(conn: &zbus::Connection) -> Result<String, String> {
         .ok_or("no color returned")?;
     let c = |x: f64| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
     Ok(format!("#{:02x}{:02x}{:02x}", c(red), c(green), c(blue)))
+}
+
+/// GNOME's file chooser ("Open"); returns the chosen local paths. Used
+/// when dragging is not handy: the shelf's and the converter's
+/// "Choose files…" buttons.
+pub async fn choose_files(
+    conn: &zbus::Connection,
+    title: &str,
+    multiple: bool,
+) -> Result<Vec<std::path::PathBuf>, String> {
+    let opts = HashMap::from([
+        ("multiple", zbus::Variant::from(multiple)),
+        ("modal", zbus::Variant::from(true)),
+    ]);
+    let r = request_titled(
+        conn,
+        "org.freedesktop.portal.FileChooser",
+        "OpenFile",
+        title,
+        opts,
+    )
+    .await?;
+    let uris: Vec<String> = r
+        .get("uris")
+        .and_then(|v| v.try_clone().ok()?.try_into().ok())
+        .unwrap_or_default();
+    Ok(uris
+        .iter()
+        .filter_map(|u| u.strip_prefix("file://"))
+        .map(|p| percent_decode(p).into())
+        .collect())
 }
 
 /// File URIs escape spaces and other bytes as %XX.

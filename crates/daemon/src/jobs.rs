@@ -152,6 +152,16 @@ pub async fn run(
             .await;
             Ok(String::new())
         }
+        // args: title, "multiple" or "single". Result: JSON list of paths.
+        "choose_files" => {
+            let paths = portal::choose_files(&ctx.session, arg(0)?, arg(1)? == "multiple").await?;
+            json(
+                &paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect::<Vec<_>>(),
+            )
+        }
         "copy_text" => {
             set_clipboard(e, arg(0)?, "text/plain;charset=utf-8").await;
             Ok(String::new())
