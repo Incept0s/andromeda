@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/social-preview.png" width="860" alt="Andromeda: system monitor, volume mixer and toolbox behind one icon in the GNOME top bar">
+<img src="docs/assets/social-preview.png" width="860" alt="Andromeda: system monitor, volume mixer and toolbox behind one icon in the GNOME top bar">
 
 [![Release](https://img.shields.io/github/v/release/Incept0s/andromeda?include_prereleases&label=release&color=78aeff)](../../releases)
 [![License: GPL v3+](https://img.shields.io/badge/License-GPL%20v3%2B-blue.svg)](LICENSE)

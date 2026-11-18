@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26262a"/>
+      <stop offset="1" stop-color="#18181b"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- dark grey rounded tile -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="#fff" stroke-opacity="0.08"/>
+  <!-- galaxy, tilted like M31 -->
+  <g transform="translate(64 64) scale(1.22) rotate(-32) translate(-64 -64)">
+    <ellipse cx="64" cy="64" rx="48" ry="17" fill="url(#halo)"/>
+    <ellipse cx="64" cy="64" rx="40" ry="12.5" fill="none" stroke="#fff" stroke-opacity="0.35" stroke-width="1.6"/>
+    <ellipse cx="64" cy="64" rx="29" ry="8.5" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="1.6"/>
+    <!-- dust lane -->
+    <path d="M30 60.5 Q64 52 98 60.5" fill="none" stroke="#18181b" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="64" cy="64" rx="14" ry="6" fill="url(#core)"/>
+    <circle cx="64" cy="64" r="3.2" fill="#fff"/>
+  </g>
+  <!-- satellite galaxies M32 and M110 -->
+  <circle cx="78" cy="76" r="2.2" fill="#fff" fill-opacity="0.85"/>
+  <ellipse cx="38" cy="40" rx="3.6" ry="2.1" transform="rotate(-50 38 40)" fill="#fff" fill-opacity="0.6"/>
+</svg>
