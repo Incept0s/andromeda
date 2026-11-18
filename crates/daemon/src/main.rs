@@ -369,10 +369,15 @@ impl Daemon {
         id
     }
 
+    /// The clipboard history changed (a copy, pin, delete or clear), so
+    /// open lists can reload it.
+    #[zbus(signal)]
+    async fn clipboard_changed(e: &SignalEmitter<'_>) -> zbus::Result<()>;
+
     /// Called by the Shell extension for every text copy.
-    fn clipboard_add(&mut self, text: &str) {
-        if self.config.features.clipboard {
-            self.clipboard.add(text, unix_now());
+    async fn clipboard_add(&mut self, text: &str, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
+        if self.config.features.clipboard && self.clipboard.add(text, unix_now()) {
+            let _ = Self::clipboard_changed(&e).await;
         }
     }
 
@@ -412,8 +417,9 @@ impl Daemon {
         tokio::spawn(async move {
             if let Ok(Some(img)) =
                 tokio::task::spawn_blocking(move || clipboard::ClipImage::from_png(data)).await
+                && iface.get_mut().await.clipboard.add_image(img, unix_now())
             {
-                iface.get_mut().await.clipboard.add_image(img, unix_now());
+                let _ = Daemon::clipboard_changed(iface.signal_emitter()).await;
             }
         });
     }
@@ -428,17 +434,25 @@ impl Daemon {
         }
     }
 
-    fn clipboard_pin(&mut self, id: u64, pinned: bool) {
+    async fn clipboard_pin(
+        &mut self,
+        id: u64,
+        pinned: bool,
+        #[zbus(signal_emitter)] e: SignalEmitter<'_>,
+    ) {
         self.clipboard.pin(id, pinned);
+        let _ = Self::clipboard_changed(&e).await;
     }
 
-    fn clipboard_delete(&mut self, id: u64) {
+    async fn clipboard_delete(&mut self, id: u64, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
         self.clipboard.delete(id);
+        let _ = Self::clipboard_changed(&e).await;
     }
 
     /// Clears the history except pinned entries.
-    fn clipboard_clear(&mut self) {
+    async fn clipboard_clear(&mut self, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
         self.clipboard.clear();
+        let _ = Self::clipboard_changed(&e).await;
     }
 
     /// Shelf contents as JSON (`Vec<tools::ShelfItem>`), newest first.

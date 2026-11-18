@@ -68,12 +68,21 @@ fn watch_drags(window: &tauri::WebviewWindow) {
         use gtk::prelude::WidgetExt;
         let view: webkit2gtk::WebView = webview.inner();
         let (app2, label2) = (app.clone(), label.clone());
+        // Logged (journalctl --user | grep andromeda) so a failed drag can
+        // be told apart from one that never started.
         view.connect_drag_begin(move |_, _| {
+            eprintln!("andromeda: drag out of {label2} started");
             if let Ok(mut g) = app2.state::<PanelTimes>().dragging.lock() {
                 g.insert(label2.clone());
             }
         });
+        let label3 = label.clone();
+        view.connect_drag_failed(move |_, _, result| {
+            eprintln!("andromeda: drag out of {label3} failed: {result:?}");
+            gtk::glib::Propagation::Proceed
+        });
         view.connect_drag_end(move |_, _| {
+            eprintln!("andromeda: drag out of {label} ended");
             if let Ok(mut g) = app.state::<PanelTimes>().dragging.lock() {
                 g.remove(&label);
             }
@@ -203,6 +212,8 @@ fn show_window(app: &AppHandle, label: &str) {
     }
     let _ = w.show();
     let _ = w.set_focus();
+    // Pages stay loaded while hidden; tell this one it is visible again.
+    let _ = app.emit_to(label, "shown", ());
     if label == "main" {
         report_visible(app, true);
     }
@@ -332,6 +343,7 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
         d.receive_awake_until_changed().await,
         d.receive_shelf_changed().await,
     );
+    let mut clipboard = d.receive_clipboard_changed().await?;
     loop {
         tokio::select! {
             Some(c) = values.next() => if panel_visible(&app) && let Ok(v) = c.get().await {
@@ -350,6 +362,9 @@ async fn dbus_main(app: AppHandle) -> zbus::Result<()> {
             },
             Some(c) = awake.next() => if let Ok(v) = c.get().await {
                 let _ = app.emit("awake", v);
+            },
+            Some(_) = clipboard.next() => {
+                let _ = app.emit("clipboard", ());
             },
             Some(c) = shelf.next() => if let Ok(s) = c.get().await
                 && let Ok(items) = serde_json::from_str::<Vec<andromeda_core::tools::ShelfItem>>(&s)

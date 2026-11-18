@@ -14,7 +14,6 @@ use serde::Serialize;
 
 use crate::Icon;
 use crate::tauri;
-use crate::widgets::{POLL_FAST, poll};
 
 #[derive(Clone, Copy, PartialEq)]
 enum View {
@@ -169,12 +168,10 @@ fn ClipList(#[prop(optional)] on_copy: Option<Callback<()>>) -> impl IntoView {
         });
     };
     refresh();
-    // The tool window stays loaded while hidden: refresh when it comes
-    // back instead of polling in the background.
-    let _ = window_event_listener(leptos::ev::focus, move |_| refresh());
-    if on_copy.is_none() {
-        poll(POLL_FAST, refresh);
-    }
+    // No polling: the service announces every change, and a tool window
+    // (loaded while hidden) is told when it is shown again.
+    tauri::listen::<()>("clipboard", move |_| refresh());
+    tauri::listen::<()>("shown", move |_| refresh());
     view! {
         // The search line appears once there is something to search.
         <Show when=move || !items.with(Vec::is_empty) || !query.with(String::is_empty)>

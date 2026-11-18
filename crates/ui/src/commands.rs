@@ -47,6 +47,8 @@ pub trait Daemon {
     fn job(&self, kind: &str, args: &[&str]) -> zbus::Result<u32>;
     #[zbus(signal)]
     fn job_done(&self, id: u32, ok: bool, result: String) -> zbus::Result<()>;
+    #[zbus(signal)]
+    fn clipboard_changed(&self) -> zbus::Result<()>;
     fn mixer_volume(&self, app: &str, percent: f64) -> zbus::Result<()>;
     fn mixer_mute(&self, app: &str, mute: bool) -> zbus::Result<()>;
     fn mixer_output(&self, app: &str, sink: &str) -> zbus::Result<()>;
