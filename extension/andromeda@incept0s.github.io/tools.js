@@ -5,7 +5,8 @@
 //
 // * A click asks the panel app (over D-Bus) to show or hide the tool's
 //   small window; the extension then moves that window under the icon.
-// * Files dragged from any app onto an icon are handed to the daemon.
+// * Files dragged from any app onto an icon are handed on: to the daemon
+//   (shelf) or to the panel app, which opens the converter with the file.
 //
 // Dropping on the top bar: on Wayland a drag is owned by the compositor.
 // Mutter reports where a drag is (Meta.Dnd "dnd-position-change", the
@@ -34,10 +35,18 @@ const DAEMON_IFACE = 'io.github.incept0s.Andromeda1';
  * One entry per tool, in top-bar order (left to right).
  * name: Panel1.ToggleTool argument and config key under `icons`.
  * title: the tool window's title; must match TOOLS in crates/ui/src/main.rs.
- * drop: daemon method that takes dropped file paths (as), if any.
+ * drop: where dropped files go: [bus name, path, interface, method, signature].
+ *   The shelf takes every path, the converter the first one.
  */
 const TOOLS = [
-    {name: 'shelf', label: 'Shelf', icon: 'package-x-generic-symbolic', title: 'Andromeda Shelf', drop: 'ShelfAdd'},
+    {
+        name: 'shelf', label: 'Shelf', icon: 'package-x-generic-symbolic', title: 'Andromeda Shelf',
+        drop: [DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, 'ShelfAdd', '(as)'],
+    },
+    {
+        name: 'convert', label: 'Converter', icon: 'media-playlist-repeat-symbolic', title: 'Andromeda Converter',
+        drop: [PANEL_NAME, PANEL_PATH, PANEL_IFACE, 'ConvertFile', '(s)'],
+    },
 ];
 
 /** Local paths from a text/uri-list ("#" lines are comments). */
@@ -205,12 +214,15 @@ export class ToolIcons {
     }
 
     _dropOn(tool, paths) {
-        Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, tool.drop,
-            new GLib.Variant('(as)', [paths]), null, Gio.DBusCallFlags.NONE, -1, null, (conn, res) => {
+        const [name, path, iface, method, signature] = tool.drop;
+        const args = signature === '(as)' ? [paths] : [paths[0]];
+        // D-Bus activation starts the service or panel app if needed.
+        Gio.DBus.session.call(name, path, iface, method, new GLib.Variant(signature, args),
+            null, Gio.DBusCallFlags.NONE, -1, null, (conn, res) => {
                 try {
                     conn.call_finish(res);
                 } catch (e) {
-                    console.warn(`Andromeda: ${tool.drop} failed: ${e.message}`);
+                    console.warn(`Andromeda: ${method} failed: ${e.message}`);
                 }
             });
     }

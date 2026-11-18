@@ -23,7 +23,20 @@ use zbus::{connection, interface};
 /// Small glass windows opened from the top-bar tool icons:
 /// (label, title, width, height). The label is also the page
 /// (`index.html#<label>`); the title must match TOOL_TITLES in the extension.
-const TOOLS: &[(&str, &str, f64, f64)] = &[("shelf", "Andromeda Shelf", 340.0, 440.0)];
+const TOOLS: &[(&str, &str, f64, f64)] = &[
+    ("shelf", "Andromeda Shelf", 340.0, 440.0),
+    ("convert", "Andromeda Converter", 360.0, 480.0),
+];
+
+/// A file dropped on the converter icon, kept until the converter page
+/// asks for it (the window may still be loading).
+#[derive(Default)]
+struct PendingConvert(Mutex<Option<String>>);
+
+#[tauri::command]
+fn take_convert_file(app: AppHandle) -> Option<String> {
+    app.state::<PendingConvert>().0.lock().ok()?.take()
+}
 
 /// Per window (panel or tool): when it was last shown, and when it last hid
 /// because it lost focus.
@@ -172,7 +185,16 @@ impl Panel {
     fn open_settings(&self) {
         let _ = open_settings(self.app.clone());
     }
-    /// Shows or hides a tool window by name ("shelf").
+    /// Opens the converter with `path` (a file dropped on its icon).
+    fn convert_file(&self, path: &str) {
+        if let Ok(mut g) = self.app.state::<PendingConvert>().0.lock() {
+            *g = Some(path.to_owned());
+        }
+        show_window(&self.app, "convert");
+        // An already loaded page gets it at once; a new one asks on load.
+        let _ = self.app.emit_to("convert", "convert-file", path);
+    }
+    /// Shows or hides a tool window by name ("shelf", "convert").
     fn toggle_tool(&self, name: &str) {
         if TOOLS.iter().any(|t| t.0 == name) {
             toggle_window(&self.app, name);
@@ -307,11 +329,13 @@ fn main() {
             }
         }))
         .manage(PanelTimes::default())
+        .manage(PendingConvert::default())
         .invoke_handler(tauri::generate_handler![
             quit,
             open_settings,
             hide,
             set_sticky,
+            take_convert_file,
             close_settings,
             commands::clipboard_list,
             commands::clipboard_copy,

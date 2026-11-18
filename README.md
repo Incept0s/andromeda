@@ -53,6 +53,9 @@ And outside the panel:
   a chat. Files leave the shelf after 24 hours (or 1 hour, or never), and a
   Clear button empties it. The shelf only links to your files, it never
   copies or moves them.
+- **A converter in the top bar** (optional, Settings → Top bar). Drop a file
+  on the arrows icon to see what it can become: WebP, JPEG, MP3, GIF, PDF,
+  smaller files. The result can go straight onto the shelf.
 - **Alt+Tab with large previews.** One live preview per window, minimized
   windows included, grouped by app.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:

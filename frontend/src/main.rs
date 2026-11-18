@@ -288,6 +288,10 @@ fn main() {
             hide_on_escape();
             view! { <tools::ShelfWindow /> }
         }),
+        "#convert" => mount_to_body(|| {
+            hide_on_escape();
+            view! { <tools::ConvertWindow /> }
+        }),
         _ => mount_to_body(Panel),
     }
 }

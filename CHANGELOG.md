@@ -12,7 +12,10 @@ All notable changes to Andromeda are listed here. The format follows
   it to open a small shelf window and drag files out again. Items leave
   after 24 hours (Settings → Top bar: 1 hour, 24 hours or never), a Clear
   button empties the shelf, and it survives a logout.
-- "Choose files…" (GNOME's file chooser) for the shelf.
+- "Choose files…" (GNOME's file chooser) for the shelf and the converter.
+- Optional converter icon in the top bar (off by default): drop a file on it
+  and a small converter window opens with that file. Converted files can be
+  put on the shelf with one click.
 
 ### Changed
 
@@ -22,6 +25,9 @@ All notable changes to Andromeda are listed here. The format follows
 
 ### Fixed
 
+- The file converter could not receive files: drops on the panel were not
+  delivered. Files now arrive from the converter icon, the converter
+  window's own drop target, or the file chooser.
 - Panel and Settings glass were darker than the dash and notifications:
   the tint was painted twice. Corners now match the shell's menus (20 px).
 

@@ -231,6 +231,7 @@ fn TopBar() -> impl IntoView {
                 }).collect_view()}
             </div>
         </div>
+        <Toggle label="Converter" hint="Drop a file on it to turn it into another format." get=|c| c.icons.convert set=|c, v| c.icons.convert = v />
         <h3 class="sub">"Numbers"</h3>
         <div class="order">
             {move || chosen().into_iter().enumerate().map(|(i, id)| {

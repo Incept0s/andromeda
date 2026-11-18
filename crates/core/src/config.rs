@@ -70,11 +70,16 @@ impl Default for Features {
 pub struct Icons {
     /// Box icon: drop files on it to park them, click it to get them back.
     pub shelf: bool,
+    /// Converter: drop a file on it to see what it can be turned into.
+    pub convert: bool,
 }
 
 impl Default for Icons {
     fn default() -> Self {
-        Self { shelf: true }
+        Self {
+            shelf: true,
+            convert: false,
+        }
     }
 }
 
@@ -270,6 +275,7 @@ mod tests {
         assert_eq!(c.alerts.cooldown_minutes, 15);
         assert_eq!(c.topbar_side, TopBarSide::Right);
         assert!(c.icons.shelf);
+        assert!(!c.icons.convert);
         assert_eq!(c.shelf.keep_hours, Some(24));
         let left: Config = serde_json::from_str(r#"{"topbar_side":"Left"}"#).unwrap();
         assert_eq!(left.topbar_side, TopBarSide::Left);

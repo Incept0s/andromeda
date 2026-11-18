@@ -196,8 +196,35 @@ fn Clipboard(view: RwSignal<View>) -> impl IntoView {
     }
 }
 
+/// Opens GNOME's file chooser for one file to convert.
+fn choose_for_convert(file: RwSignal<Option<String>>) {
+    tauri::spawn(async move {
+        if let Ok(paths) = tauri::invoke::<_, Vec<String>>(
+            "choose_files",
+            &Choose {
+                title: "Choose a file to convert",
+                multiple: false,
+            },
+        )
+        .await
+            && let Some(p) = paths.into_iter().next()
+        {
+            file.set(Some(p));
+        }
+    });
+}
+
 #[component]
 fn Convert(view: RwSignal<View>, file: RwSignal<Option<String>>) -> impl IntoView {
+    view! {
+        <Back view title="Convert files" />
+        <ConvertBody file />
+    }
+}
+
+/// The converter itself, shared by the Tools tab and the converter window.
+#[component]
+fn ConvertBody(file: RwSignal<Option<String>>) -> impl IntoView {
     let options = RwSignal::new(Vec::<ConvertOption>::new());
     let busy = RwSignal::new(None::<String>);
     let result = RwSignal::new(None::<Result<String, String>>);
@@ -226,12 +253,14 @@ fn Convert(view: RwSignal<View>, file: RwSignal<Option<String>>) -> impl IntoVie
         });
     };
     view! {
-        <Back view title="Convert files" />
         <div class="dropzone">
             {move || match file.get() {
                 Some(p) => view! { <strong>{file_name(&p)}</strong> }.into_any(),
                 None => view! { <span class="muted">"Drop a file here"</span> }.into_any(),
             }}
+            <button class="btn small-btn" on:click=move |_| choose_for_convert(file)>
+                {move || if file.with(Option::is_some) { "Choose another file…" } else { "Choose file…" }}
+            </button>
             <div class="muted small">"Everything runs on this computer."</div>
         </div>
         <Show when=move || file.with(Option::is_some) && options.with(Vec::is_empty)>
@@ -257,9 +286,13 @@ fn Convert(view: RwSignal<View>, file: RwSignal<Option<String>>) -> impl IntoVie
             Ok(p) if p.is_empty() => view! { <p class="small accent-text">"Text copied to the clipboard."</p> }.into_any(),
             Ok(p) => {
                 let dir = parent(&p);
+                let on_shelf = vec![p.clone()];
                 view! {
                     <p class="small">"Saved as "<strong>{file_name(&p)}</strong>" "
                         <button class="link" on:click=move |_| tauri::call("open_path", PathArg { path: dir.clone() })>"Show folder"</button>
+                        " · "
+                        <button class="link" title="Put the new file on the shelf, to drag it into another app"
+                            on:click=move |_| tauri::call("shelf_add", Paths { paths: on_shelf.clone() })>"Put on shelf"</button>
                     </p>
                 }.into_any()
             }
@@ -590,6 +623,48 @@ fn Shelf(
             <button class="btn small-btn" on:click=|_| tauri::call("shelf_clear", ())>"Clear shelf"</button>
         </Show>
         <p class="muted small">{move || keep_text(keep.get())}</p>
+    }
+}
+
+/// The small window under the converter icon in the top bar. A file
+/// dropped on the icon arrives as `convert-file` (or, while this page is
+/// still loading, from `take_convert_file`).
+#[component]
+pub fn ConvertWindow() -> impl IntoView {
+    let file = RwSignal::new(None::<String>);
+    tauri::spawn(async move {
+        if let Some(Some(p)) = tauri::get::<Option<String>>("take_convert_file").await {
+            file.set(Some(p));
+        }
+    });
+    tauri::listen::<String>("convert-file", move |p| {
+        file.set(Some(p));
+        tauri::call("take_convert_file", ());
+    });
+    tauri::on_file_drop(move |paths| file.set(paths.into_iter().next()));
+    let (shelf, _) = shelf_state();
+    view! {
+        <main class="glass tool">
+            <header class="tool-head">
+                <Icon name="file-symlink" />
+                <strong class="grow">"Convert"</strong>
+            </header>
+            <section class="content">
+                <ConvertBody file />
+                <Show when=move || file.with(Option::is_none) && !shelf.with(Vec::is_empty)>
+                    <h3 class="sub">"From the shelf"</h3>
+                    <div class="chips">
+                        <For each=move || shelf.get() key=|i| i.path.clone() let:i>
+                            {
+                                let p = i.path.clone();
+                                view! { <button class="chip" on:click=move |_| file.set(Some(p.clone()))>{i.name.clone()}</button> }
+                            }
+                        </For>
+                    </div>
+                </Show>
+            </section>
+            <footer class="muted small tool-foot">"Drop a file on the converter icon in the top bar, or here."</footer>
+        </main>
     }
 }
 
