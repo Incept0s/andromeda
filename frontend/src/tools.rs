@@ -176,8 +176,12 @@ fn ClipList(#[prop(optional)] on_copy: Option<Callback<()>>) -> impl IntoView {
         poll(POLL_FAST, refresh);
     }
     view! {
-        <input class="search wide" type="search" placeholder="Search copied text"
-            on:input=move |e| { query.set(event_target_value(&e)); refresh(); } />
+        // The search line appears once there is something to search.
+        <Show when=move || !items.with(Vec::is_empty) || !query.with(String::is_empty)>
+            <input class="search wide" type="search" placeholder="Search copied text"
+                prop:value=move || query.get()
+                on:input=move |e| { query.set(event_target_value(&e)); refresh(); } />
+        </Show>
         <Show when=move || !items.with(Vec::is_empty)
             fallback=|| view! { <p class="muted small">"Copied text and images show up here. They stay on this computer."</p> }>
             <For each=move || items.get() key=|e| (e.id, e.pinned, e.time) let:e>

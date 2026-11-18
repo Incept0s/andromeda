@@ -313,7 +313,9 @@ input, select { text-shadow: none; }
 .picker { max-width: 150px; height: 26px; padding: 0 6px; font-size: 12px; }
 .picker option { background: #242424; }
 .num { width: 70px; height: 26px; padding: 0 6px; }
-.search.wide { flex: 1; width: 100%; }
+.search.wide { flex: none; width: 100%; }
+/* Beside a button (Packages): take the row's free width, not the height. */
+.row .search.wide { flex: 1; width: auto; }
 input[type="checkbox"] { accent-color: var(--accent); }
 
 /* Range slider: the filled part is a gradient up to --fill. */
