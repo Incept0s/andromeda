@@ -9,6 +9,7 @@
 //! recognising it by title.
 
 mod commands;
+mod drag;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -72,9 +73,7 @@ fn watch_drags(window: &tauri::WebviewWindow) {
         // be told apart from one that never started.
         view.connect_drag_begin(move |_, _| {
             eprintln!("andromeda: drag out of {label2} started");
-            if let Ok(mut g) = app2.state::<PanelTimes>().dragging.lock() {
-                g.insert(label2.clone());
-            }
+            set_dragging(&app2, &label2, true);
         });
         let label3 = label.clone();
         view.connect_drag_failed(move |_, _, result| {
@@ -83,23 +82,36 @@ fn watch_drags(window: &tauri::WebviewWindow) {
         });
         view.connect_drag_end(move |_, _| {
             eprintln!("andromeda: drag out of {label} ended");
-            if let Ok(mut g) = app.state::<PanelTimes>().dragging.lock() {
-                g.remove(&label);
-            }
-            // Focus normally comes back after the drop; if it went to
-            // another window instead, behave like any other click elsewhere.
-            let (app, label) = (app.clone(), label.clone());
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                if let Some(w) = app.get_webview_window(&label)
-                    && w.is_visible().unwrap_or(false)
-                    && !w.is_focused().unwrap_or(true)
-                    && !is_held(&app, &label)
-                {
-                    hide_window(&app, &label);
-                }
-            });
+            drag_finished(&app, &label);
         });
+    });
+}
+
+pub fn set_dragging(app: &AppHandle, label: &str, on: bool) {
+    if let Ok(mut g) = app.state::<PanelTimes>().dragging.lock() {
+        if on {
+            g.insert(label.to_owned());
+        } else {
+            g.remove(label);
+        }
+    }
+}
+
+/// A drag out of `label` ended. Focus normally comes back after the drop;
+/// if it went to another window instead, behave like any other click
+/// elsewhere and hide.
+pub fn drag_finished(app: &AppHandle, label: &str) {
+    set_dragging(app, label, false);
+    let (app, label) = (app.clone(), label.to_owned());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        if let Some(w) = app.get_webview_window(&label)
+            && w.is_visible().unwrap_or(false)
+            && !w.is_focused().unwrap_or(true)
+            && !is_held(&app, &label)
+        {
+            hide_window(&app, &label);
+        }
     });
 }
 
@@ -434,6 +446,7 @@ fn main() {
             commands::shelf_clear,
             commands::shelf_copy,
             commands::choose_files,
+            drag::start_file_drag,
             commands::ocr,
             commands::pick_color,
             commands::convert_options,

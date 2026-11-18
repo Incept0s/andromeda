@@ -73,19 +73,6 @@ struct Choose {
     multiple: bool,
 }
 
-/// `file://` URI for a path, escaping everything but unreserved bytes and '/'.
-fn file_uri(path: &str) -> String {
-    let mut out = String::from("file://");
-    for b in path.bytes() {
-        if b.is_ascii_alphanumeric() || b"-._~/".contains(&b) {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
-}
-
 fn now_secs() -> i64 {
     (js_sys::Date::now() / 1000.0) as i64
 }
@@ -581,11 +568,11 @@ fn ShelfList(
                 view! {
                     <div class="pkg shelf-item" draggable="true" title="Drag into another app"
                         on:dragstart=move |e: leptos::ev::DragEvent| {
-                            if let Some(dt) = e.data_transfer() {
-                                let _ = dt.set_data("text/uri-list", &file_uri(&drag_path));
-                                let _ = dt.set_data("text/plain", &drag_path);
-                                dt.set_effect_allowed("copy");
-                            }
+                            // WebKit's own drag does not offer a proper file list
+                            // (Files refused most drops). Cancel it and let the
+                            // app start a real GTK file drag (crates/ui/src/drag.rs).
+                            e.prevent_default();
+                            tauri::call("start_file_drag", Paths { paths: vec![drag_path.clone()] });
                         }>
                         <div class="grow">
                             <div class="ellipsis"><strong>{i.name.clone()}</strong></div>
