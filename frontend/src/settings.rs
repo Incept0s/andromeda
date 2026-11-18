@@ -431,8 +431,7 @@ fn About() -> impl IntoView {
     view! {
         <h2>"Andromeda"</h2>
         <p>{format!("Version {}", env!("CARGO_PKG_VERSION"))}</p>
-        <p>"Inspired by Vorssaint Utils."</p>
-        <p class="muted small">"Not affiliated with or endorsed by Vorssaint."</p>
+        <p class="muted small">"Inspired by Vorssaint Utils; not affiliated with or endorsed by Vorssaint."</p>
         <p class="muted small">"Free software under the GNU General Public License, version 3 or later."</p>
         <p class="muted small">"Interface icons: Lucide (ISC license)."</p>
         <button class="btn small-btn" on:click=|_| tauri::call("open_releases", ())>"Releases on GitHub"</button>

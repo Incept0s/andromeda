@@ -41,8 +41,7 @@ network and disk details, clipboard history, text recognition, a file
 converter, a cleaner and package management behind one top-bar icon in
 GNOME, with an Alt+Tab switcher that shows large window previews.
 
-Inspired by Vorssaint Utils.
-Not affiliated with or endorsed by Vorssaint.
+Inspired by Vorssaint Utils; not affiliated with or endorsed by Vorssaint.
 
 %prep
 %setup -q

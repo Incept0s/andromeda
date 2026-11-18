@@ -258,8 +258,8 @@ Public License, version 3 or later**; see [LICENSE](LICENSE). Third-party compon
 are listed in [THIRD-PARTY.md](THIRD-PARTY.md), and every Rust crate compiled
 in is listed in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
-**Inspired by [Vorssaint Utils](https://github.com/vorssaint/vorssaint-utils).** Two small pieces of logic are
+**Inspired by [Vorssaint Utils](https://github.com/vorssaint/vorssaint-utils);
+not affiliated with or endorsed by Vorssaint.** Two small pieces of logic are
 adapted from its GPL-3.0-or-later source and marked as modified (see
-THIRD-PARTY.md); everything else is a new implementation. Andromeda is an
-independent project, not affiliated with or endorsed by Vorssaint, and uses
-none of its logo, icons, artwork or visual design.
+THIRD-PARTY.md); everything else is a new implementation. Andromeda uses none
+of its logo, icons, artwork or visual design.
