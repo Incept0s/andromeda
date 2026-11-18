@@ -286,6 +286,7 @@ input, select { text-shadow: none; }
 .switch.on i { transform: translateX(18px); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.setting .chips { margin: 0; flex-wrap: nowrap; }
 .chip { padding: 4px var(--s3); border-radius: var(--r-pill); font-size: 13px; }
 
 /* Text fields and drop-downs. */

@@ -16,6 +16,8 @@ pub struct Config {
     /// Metric ids shown in the top bar, in order. `None` = not chosen yet,
     /// the daemon then picks defaults that exist on this machine.
     pub topbar: Option<Vec<String>>,
+    /// Which side of the top bar the numbers sit on.
+    pub topbar_side: TopBarSide,
     pub alerts: Alerts,
     pub mixer: Mixer,
     pub awake: Awake,
@@ -56,6 +58,17 @@ impl Default for Features {
             switcher: true,
         }
     }
+}
+
+/// Where the Shell extension puts the top-bar numbers. The Andromeda icon
+/// itself always sits on the right, just before the system icons.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TopBarSide {
+    /// Right half of the bar, after the clock and before the open apps.
+    #[default]
+    Right,
+    /// Far left of the bar, after Activities (or the app menu).
+    Left,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -218,6 +231,9 @@ mod tests {
         assert_eq!(c.mixer.max_volume, 180);
         assert!(c.features.mixer);
         assert_eq!(c.alerts.cooldown_minutes, 15);
+        assert_eq!(c.topbar_side, TopBarSide::Right);
+        let left: Config = serde_json::from_str(r#"{"topbar_side":"Left"}"#).unwrap();
+        assert_eq!(left.topbar_side, TopBarSide::Left);
     }
 
     #[test]

@@ -6,6 +6,12 @@ All notable changes to Andromeda are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Top bar: the numbers are their own item and can sit right of the clock
+  (before the open apps) or at the far left of the bar (Settings → Top bar →
+  Position). The Andromeda icon moves next to the system icons.
+
 ## [0.1.0] - 2026-11-18
 
 First public release.

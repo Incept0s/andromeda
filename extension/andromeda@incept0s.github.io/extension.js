@@ -32,6 +32,39 @@ const DAEMON_PATH = '/io/github/incept0s/Andromeda';
 const DAEMON_IFACE = 'io.github.incept0s.Andromeda1';
 // Password managers mark secrets with this type; they never enter history.
 const SECRET_HINT = 'x-kde-passwordManagerHint';
+// GNOME's own items at the right end of the bar (quick settings holds the
+// network, VPN, sound and battery icons). Andromeda's icons go just before.
+const SYSTEM_ROLES = ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'];
+
+function firstSystemItem(box) {
+    const system = SYSTEM_ROLES.map(r => Main.panel.statusArea[r]?.container).filter(Boolean);
+    return box.get_children().find(c => system.includes(c)) ?? null;
+}
+
+/** Moves `actor` into `box` right before `sibling`, or to the end when null. */
+function placeBefore(box, actor, sibling) {
+    if (actor.get_parent() !== box) {
+        actor.get_parent()?.remove_child(actor);
+        if (sibling)
+            box.insert_child_below(actor, sibling);
+        else
+            box.add_child(actor);
+    } else if (sibling) {
+        box.set_child_below_sibling(actor, sibling);
+    } else {
+        box.set_child_above_sibling(actor, null);
+    }
+}
+
+/** Moves `actor` to the start of `box`. */
+function placeFirst(box, actor) {
+    if (actor.get_parent() !== box) {
+        actor.get_parent()?.remove_child(actor);
+        box.insert_child_at_index(actor, 0);
+    } else {
+        box.set_child_below_sibling(actor, null);
+    }
+}
 
 export default class AndromedaExtension extends Extension {
     enable() {
@@ -41,21 +74,35 @@ export default class AndromedaExtension extends Extension {
             gicon: Gio.icon_new_for_string(`${this.path}/icons/andromeda-symbolic.svg`),
             style_class: 'system-status-icon',
         }));
-        // Plain numbers formatted by the daemon (e.g. "CPU 42°  RAM 61%").
-        // The daemon publishes at most one change per second; this only
-        // sets the text. Hidden while empty.
-        this._label = new St.Label({
-            style_class: 'andromeda-label',
-            y_align: Clutter.ActorAlign.CENTER,
-            visible: false,
-        });
-        box.add_child(this._label);
         this._button.add_child(box);
         this._button.connect('button-press-event', () => {
             this._toggle();
             return Clutter.EVENT_STOP;
         });
         Main.panel.addToStatusArea(this.uuid, this._button);
+
+        // Plain numbers formatted by the daemon (e.g. "CPU 42°  RAM 61%").
+        // The daemon publishes at most one change per second; this only
+        // sets the text. Their own top-bar item, so they can sit on either
+        // side of the bar (Settings → Top bar). Hidden while empty; a click
+        // opens the panel like the icon does.
+        this._vitals = new PanelMenu.Button(0.0, `${this.metadata.name} numbers`, true);
+        this._label = new St.Label({
+            style_class: 'andromeda-label',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._vitals.add_child(this._label);
+        this._vitals.visible = false;
+        this._vitals.connect('button-press-event', () => {
+            this._toggle();
+            return Clutter.EVENT_STOP;
+        });
+        Main.panel.addToStatusArea(`${this.uuid}-numbers`, this._vitals);
+
+        this._side = 'Right';
+        this._layout();
+        // Other extensions (tray icons) add items later; put ours back in place.
+        this._rightAddedId = Main.panel._rightBox.connect('child-added', () => this._queueLayout());
 
         // Super+A opens the panel. GNOME uses it for "Show apps", so it is
         // taken from there while Andromeda is enabled and given back after.
@@ -106,9 +153,42 @@ export default class AndromedaExtension extends Extension {
         Gio.DBus.session.signal_unsubscribe(this._propsId);
         Gio.bus_unwatch_name(this._watchId);
         this._setSwitcher(false);
+        Main.panel._rightBox.disconnect(this._rightAddedId);
+        if (this._layoutId)
+            GLib.source_remove(this._layoutId);
+        this._layoutId = 0;
         this._label = null;
+        this._vitals.destroy();
+        this._vitals = null;
         this._button.destroy();
         this._button = null;
+    }
+
+    /**
+     * Top-bar order, left to right in the right half of the bar:
+     *   [numbers] [open apps / tray icons] [Andromeda] [system icons]
+     * With topbar_side = Left the numbers move to the end of the left box
+     * (after Activities or an app menu) instead.
+     */
+    _layout() {
+        if (!this._button)
+            return;
+        const right = Main.panel._rightBox;
+        placeBefore(right, this._button.container, firstSystemItem(right));
+        if (this._side === 'Left')
+            placeBefore(Main.panel._leftBox, this._vitals.container, null);
+        else
+            placeFirst(right, this._vitals.container);
+    }
+
+    _queueLayout() {
+        if (this._layoutId)
+            return;
+        this._layoutId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._layoutId = 0;
+            this._layout();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _freeShortcuts() {
@@ -148,7 +228,7 @@ export default class AndromedaExtension extends Extension {
         if (!this._label)
             return;
         this._label.text = text;
-        this._label.visible = text.length > 0;
+        this._vitals.visible = text.length > 0;
     }
 
     _fetchState() {
@@ -165,13 +245,17 @@ export default class AndromedaExtension extends Extension {
         get('Config', c => this._applyConfig(c));
     }
 
-    /** Only the feature switch is read from the settings JSON. */
+    /** Only the switcher switch and the numbers' side are read from the settings JSON. */
     _applyConfig(json) {
+        let c = {};
         try {
-            this._setSwitcher(JSON.parse(json).features?.switcher === true);
+            c = JSON.parse(json);
         } catch {
-            this._setSwitcher(false);
+            // Keep the defaults below.
         }
+        this._setSwitcher(c.features?.switcher === true);
+        this._side = c.topbar_side === 'Left' ? 'Left' : 'Right';
+        this._layout();
     }
 
     _setSwitcher(on) {

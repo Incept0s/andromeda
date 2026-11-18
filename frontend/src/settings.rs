@@ -3,7 +3,7 @@
 //! the daemon at once (no Save button); the daemon saves the file and
 //! echoes the new settings back.
 
-use andromeda_core::config::{self, AlertRule, Config, Direction, TOPBAR_SOFT_LIMIT};
+use andromeda_core::config::{self, AlertRule, Config, Direction, TOPBAR_SOFT_LIMIT, TopBarSide};
 use andromeda_core::info::Check;
 use andromeda_core::metrics::{Unit, format};
 use leptos::prelude::*;
@@ -51,7 +51,7 @@ impl Page {
         match self {
             Page::General => "login startup update version",
             Page::Features => "tabs enable disable on off switch",
-            Page::TopBar => "panel numbers metrics order temperature",
+            Page::TopBar => "panel numbers metrics order temperature position left right vitals",
             Page::Alerts => "notifications threshold warning",
             Page::Mixer => "volume boost audio sound hidden apps",
             Page::Awake => "sleep suspend battery timer caffeine",
@@ -188,10 +188,26 @@ fn TopBar() -> impl IntoView {
         g
     };
 
+    let side = move || {
+        d.config
+            .with(|c| c.as_ref().map_or(TopBarSide::Right, |c| c.topbar_side))
+    };
+    let set_side = move |s: TopBarSide| d.edit_config(|c| c.topbar_side = s);
+
     view! {
         <h2>"Top bar"</h2>
-        <p class="muted">"Plain numbers next to the Andromeda icon. Drag to reorder."</p>
+        <p class="muted">"Plain numbers in the top bar. A click on them opens the panel. Drag to reorder."</p>
         <div class="preview">{preview}</div>
+        <div class="setting">
+            <div class="grow">
+                <div>"Position"</div>
+                <div class="muted small">"Right of the clock, before your open apps, or at the far left of the bar."</div>
+            </div>
+            <div class="chips">
+                <button class="chip" class:sel=move || side() == TopBarSide::Left on:click=move |_| set_side(TopBarSide::Left)>"Far left"</button>
+                <button class="chip" class:sel=move || side() == TopBarSide::Right on:click=move |_| set_side(TopBarSide::Right)>"Right of the clock"</button>
+            </div>
+        </div>
         <Show when=move || { chosen().len() > TOPBAR_SOFT_LIMIT }>
             <p class="warn-text small">{format!("More than {TOPBAR_SOFT_LIMIT} items may not fit in the top bar.")}</p>
         </Show>

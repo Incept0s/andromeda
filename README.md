@@ -46,7 +46,8 @@ runs while it is open and quits a few minutes after you close it.
 And outside the panel:
 
 - **Numbers in the top bar.** Plain text, no graphs, e.g. `CPU 42°  RAM 61%  12W`.
-  Choose and order them in Settings → Top bar.
+  Choose and order them in Settings → Top bar, and put them right of the
+  clock or at the far left of the bar.
 - **Alt+Tab with large previews.** One live preview per window, minimized
   windows included, grouped by app.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:
