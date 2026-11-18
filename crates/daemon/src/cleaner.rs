@@ -2,7 +2,8 @@
 //
 // The pre-check policy (strong evidence + cheap to rebuild = checked;
 // guesses = unchecked) follows Vorssaint Utils' CleanerPolicy.swift,
-// Copyright (C) 2026 Vorssaint, GPL-3.0-or-later. Modified: rewritten for
+// Copyright (C) 2026 Vorssaint, GPL-3.0-or-later. Modified by Incept0s on
+// 2026-11-17: rewritten for
 // Linux paths and tools.
 
 //! Cleaner: finds caches, Trash, old screenshots, leftovers of removed

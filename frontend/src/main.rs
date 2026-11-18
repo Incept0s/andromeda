@@ -139,12 +139,12 @@ enum Tab {
 
 impl Tab {
     const ALL: [Tab; 8] = [
-        Tab::Awake,
-        Tab::Mixer,
         Tab::System,
+        Tab::Mixer,
         Tab::Network,
         Tab::Disk,
         Tab::Energy,
+        Tab::Awake,
         Tab::Tools,
         Tab::Controls,
     ];

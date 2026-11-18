@@ -2,7 +2,8 @@
 //
 // The sustained-reading gate below is adapted from Vorssaint Utils
 // (Sources/Vorssaint/Services/Metrics/SustainedAlertGate.swift),
-// Copyright (C) 2026 Vorssaint, GPL-3.0-or-later. Modified: translated to
+// Copyright (C) 2026 Vorssaint, GPL-3.0-or-later. Modified by Incept0s on
+// 2026-11-17: translated to
 // Rust, generic over any metric and direction, cooldown added here.
 
 //! Threshold alerts. A single reading over the limit proves nothing (a

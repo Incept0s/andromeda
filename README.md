@@ -253,8 +253,8 @@ If something in the panel confused you, that is a bug worth reporting too.
 
 ## License and credits
 
-Andromeda is free software under the **GNU General Public License, version 3
-or later**; see [LICENSE](LICENSE). Third-party components and their licences
+Copyright © 2026 Incept0s. Andromeda is free software under the **GNU General
+Public License, version 3 or later**; see [LICENSE](LICENSE). Third-party components and their licences
 are listed in [THIRD-PARTY.md](THIRD-PARTY.md), and every Rust crate compiled
 in is listed in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
@@ -262,4 +262,4 @@ in is listed in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 adapted from its GPL-3.0-or-later source and marked as modified (see
 THIRD-PARTY.md); everything else is a new implementation. Andromeda is an
 independent project, not affiliated with or endorsed by Vorssaint, and uses
-none of its name, logo or artwork.
+none of its logo, icons, artwork or visual design.

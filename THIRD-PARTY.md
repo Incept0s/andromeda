@@ -54,7 +54,8 @@ Not shipped with Andromeda; installed from Fedora and called or linked:
 ## Trademarks
 
 Vorssaint and the Vorssaint logo are trademarks of their owner. Andromeda is
-inspired by Vorssaint Utils' features and layout, is not affiliated with or
-endorsed by Vorssaint, and uses none of its name, logo or artwork. NVIDIA,
+inspired by Vorssaint Utils' feature set, is not affiliated with or endorsed by
+Vorssaint, and uses none of its logo, icons, artwork or visual design; its
+name appears only to credit the inspiration. NVIDIA,
 GNOME, Fedora and other names are trademarks of their respective owners and
 are used only to describe compatibility.
