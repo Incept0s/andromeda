@@ -56,7 +56,7 @@ Every feature can be switched off in Settings → Features. Missing hardware or
 tools only hide what needs them; Settings → System check shows what was found.
 
 <div align="center">
-<img src="docs/screenshots/topbar.png" width="640" alt="Andromeda's numbers in the GNOME top bar">
+<img src="docs/screenshots/topbar.png" width="486" alt="Andromeda's numbers in the GNOME top bar">
 </div>
 
 ## The look
@@ -101,7 +101,7 @@ scripts/install.sh
 ```
 
 The script installs the build tools it needs (Rust with its WebAssembly
-target, [Trunk](https://trunkrs.dev), the WebKitGTK development files), builds
+target, [Trunk](https://github.com/trunk-rs/trunk), the WebKitGTK development files), builds
 an RPM and installs it. Running it again updates Andromeda and keeps your
 settings.
 

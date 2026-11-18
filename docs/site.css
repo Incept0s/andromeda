@@ -148,7 +148,7 @@ section { padding: 72px 0 0; }
 .split .text h3 { font-size: 22px; margin-bottom: 8px; }
 .split .text p { color: var(--soft); }
 .split .text p + p { margin-top: 10px; }
-.topbar { width: 100%; border-radius: var(--r-control); border: 1px solid var(--edge); }
+.topbar { display: block; width: min(100%, 486px); height: auto; margin-inline: auto; border-radius: 999px; }
 
 /* ---------- install ---------- */
 .steps { counter-reset: step; display: grid; gap: 14px; margin-top: 36px; }
