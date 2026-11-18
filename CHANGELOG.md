@@ -29,6 +29,9 @@ All notable changes to Andromeda are listed here. The format follows
 
 ### Changed
 
+- Alt+Tab shows every window's title under its preview, not only the
+  selected one. Andromeda's shelf, converter and clipboard windows are left
+  out of it, like the panel.
 - Top bar: the numbers are their own item and can sit right of the clock
   (before the open apps) or at the far left of the bar (Settings → Top bar →
   Position). The Andromeda icon moves next to the system icons.

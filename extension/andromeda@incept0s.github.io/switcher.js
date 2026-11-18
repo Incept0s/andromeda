@@ -3,16 +3,19 @@
 // Builds on GNOME Shell's own window switcher (js/ui/altTab.js, GNOME Shell
 // contributors, GPL-2.0-or-later). `windowClone` is adapted from its
 // `_createWindowClone`. Modified: larger previews, windows grouped by app,
-// Alt+Tab key handling.
+// Alt+Tab key handling, the window title under every preview.
 
 // Andromeda's Alt+Tab: one large live preview per window (minimized ones
 // included), windows of the same app next to each other, the app icon on
-// each preview. Kept small on purpose: everything else (keyboard, mouse,
+// each preview and the window title under it (GNOME shows only the selected
+// window's title, which makes similar windows hard to tell apart). Kept
+// small on purpose: everything else (keyboard, mouse,
 // closing with W, scrolling a long list) is GNOME's tested code.
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as AltTab from 'resource:///org/gnome/shell/ui/altTab.js';
@@ -21,6 +24,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 const PREVIEW_SIZE = 224;
 const APP_ICON_SIZE = 48;
 const BINDINGS = ['switch-applications', 'switch-applications-backward'];
+// Andromeda's popup windows (panel and tool windows) never show in Alt+Tab;
+// Tauri cannot mark them skip-taskbar on Wayland. The Settings window does.
+const POPUP_TITLES = ['Andromeda', 'Andromeda Shelf', 'Andromeda Converter', 'Andromeda Clipboard'];
 
 function windowClone(actor, size) {
     const [width, height] = actor.get_size();
@@ -37,7 +43,7 @@ function windowClone(actor, size) {
 }
 
 // GObject subclasses of GNOME classes must be registered.
-const SwitcherPopup = GObject.registerClass(
+export const SwitcherPopup = GObject.registerClass(
 class AndromedaSwitcherPopup extends AltTab.WindowSwitcherPopup {
     _init() {
         super._init();
@@ -54,6 +60,15 @@ class AndromedaSwitcherPopup extends AltTab.WindowSwitcherPopup {
             if (icon.app)
                 icon._icon.add_child(icon._createAppIcon(icon.app, APP_ICON_SIZE));
             icon._icon.set_size(size, size);
+            // The title under the preview, one line, cut with "…".
+            const title = new St.Label({
+                text: icon.window.get_title() ?? '',
+                style_class: 'andromeda-switcher-title',
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            title.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            title.set_width(size);
+            icon.add_child(title);
         }
     }
 
@@ -61,10 +76,8 @@ class AndromedaSwitcherPopup extends AltTab.WindowSwitcherPopup {
     // entry stays the current window and the second the most recent window
     // of the previous app. The current app's other windows go last.
     _getWindowList() {
-        // Leave out Andromeda's own panel: Tauri cannot mark it
-        // skip-taskbar on Wayland, so GNOME would list it.
         const windows = super._getWindowList().filter(w =>
-            !(w.get_wm_class() === 'andromeda' && w.get_title() === 'Andromeda'));
+            !(w.get_wm_class() === 'andromeda' && POPUP_TITLES.includes(w.get_title())));
         if (windows.length < 3)
             return windows;
         const tracker = Shell.WindowTracker.get_default();

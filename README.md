@@ -64,7 +64,7 @@ And outside the panel:
   a color, Super+Shift+K turns keep awake on or off, Super+Shift+M mutes the
   microphone.
 - **Alt+Tab with large previews.** One live preview per window, minimized
-  windows included, grouped by app.
+  windows included, grouped by app, with each window's title under it.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:
   CPU temperature, low battery, a nearly full disk, any sensor you like.
 
