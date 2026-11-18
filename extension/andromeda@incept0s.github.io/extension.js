@@ -50,9 +50,24 @@ const SHORTCUT_KEYS = {
     mic_mute: 'toggle-mic-mute',
 };
 
-function firstSystemItem(box) {
+/**
+ * Where our group goes in the right box: right after the last item that is
+ * neither ours nor GNOME's (the open apps' tray icons), so all of GNOME's
+ * items stay to the right. Returns the item to insert before (null = end).
+ *
+ * Not simply "before the first GNOME item": AppIndicator puts tray icons at
+ * index 1, which can fall between GNOME's own (often hidden) items, e.g.
+ * after screenRecording, and the tray icon then ended up right of ours.
+ */
+function afterOpenApps(box, ours) {
     const system = SYSTEM_ROLES.map(r => Main.panel.statusArea[r]?.container).filter(Boolean);
-    return box.get_children().find(c => system.includes(c)) ?? null;
+    const children = box.get_children();
+    let lastApp = -1;
+    children.forEach((c, i) => {
+        if (!ours.includes(c) && !system.includes(c))
+            lastApp = i;
+    });
+    return children.slice(lastApp + 1).find(c => !ours.includes(c)) ?? null;
 }
 
 /** Moves `actor` into `box` right before `sibling`, or to the end when null. */
@@ -228,8 +243,10 @@ export default class AndromedaExtension extends Extension {
         if (!this._button)
             return;
         const right = Main.panel._rightBox;
-        for (const c of [...this._tools.containers, this._button.container])
-            placeBefore(right, c, firstSystemItem(right));
+        const group = [...this._tools.containers, this._button.container];
+        const before = afterOpenApps(right, [...group, this._vitals.container]);
+        for (const c of group)
+            placeBefore(right, c, before);
         if (this._side === 'Left')
             placeBefore(Main.panel._leftBox, this._vitals.container, null);
         else
