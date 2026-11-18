@@ -10,7 +10,7 @@
 
 mod commands;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -49,6 +49,61 @@ struct PanelTimes {
     /// tab is open (files can be dragged onto it from another window), any
     /// window while its file chooser is up.
     sticky: Mutex<HashMap<String, bool>>,
+    /// Windows a drag is currently leaving from (see `watch_drags`).
+    dragging: Mutex<HashSet<String>>,
+}
+
+/// Keeps a window open while something is dragged out of it.
+///
+/// On Wayland the compositor takes keyboard focus away from a window as
+/// soon as a drag starts there. Our windows hide when they lose focus, and
+/// a hidden window loses its surface, which cancels the drag: dragging a
+/// file out of the shelf never reached Files. WebKit starts its drags with
+/// gtk_drag_begin on the webview widget, so the widget's own drag-begin /
+/// drag-end signals tell us exactly when to hold still.
+fn watch_drags(window: &tauri::WebviewWindow) {
+    let app = window.app_handle().clone();
+    let label = window.label().to_owned();
+    let _ = window.with_webview(move |webview| {
+        use gtk::prelude::WidgetExt;
+        let view: webkit2gtk::WebView = webview.inner();
+        let (app2, label2) = (app.clone(), label.clone());
+        view.connect_drag_begin(move |_, _| {
+            if let Ok(mut g) = app2.state::<PanelTimes>().dragging.lock() {
+                g.insert(label2.clone());
+            }
+        });
+        view.connect_drag_end(move |_, _| {
+            if let Ok(mut g) = app.state::<PanelTimes>().dragging.lock() {
+                g.remove(&label);
+            }
+            // Focus normally comes back after the drop; if it went to
+            // another window instead, behave like any other click elsewhere.
+            let (app, label) = (app.clone(), label.clone());
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                if let Some(w) = app.get_webview_window(&label)
+                    && w.is_visible().unwrap_or(false)
+                    && !w.is_focused().unwrap_or(true)
+                    && !is_held(&app, &label)
+                {
+                    hide_window(&app, &label);
+                }
+            });
+        });
+    });
+}
+
+/// True while a window must stay although it lost focus: it is sticky or
+/// something is being dragged out of it.
+fn is_held(app: &AppHandle, label: &str) -> bool {
+    let times = app.state::<PanelTimes>();
+    let sticky = times
+        .sticky
+        .lock()
+        .is_ok_and(|g| g.get(label).copied().unwrap_or(false));
+    let dragging = times.dragging.lock().is_ok_and(|g| g.contains(label));
+    sticky || dragging
 }
 
 /// Tells the daemon whether anyone is looking, so it can slow down
@@ -100,6 +155,17 @@ fn set_sticky(window: tauri::WebviewWindow, sticky: bool) {
 
 /// Shows the panel or a tool window, creating a tool window on first use.
 fn show_window(app: &AppHandle, label: &str) {
+    // One at a time: the panel or one tool window, like the shell's own
+    // menus. (The Settings window is a normal window and stays.)
+    for other in std::iter::once("main").chain(TOOLS.iter().map(|t| t.0)) {
+        if other != label
+            && app
+                .get_webview_window(other)
+                .is_some_and(|w| w.is_visible().unwrap_or(false))
+        {
+            hide_window(app, other);
+        }
+    }
     let w = match app.get_webview_window(label) {
         Some(w) => w,
         None => {
@@ -121,7 +187,10 @@ fn show_window(app: &AppHandle, label: &str) {
             .theme(Some(tauri::Theme::Dark))
             .build()
             {
-                Ok(w) => w,
+                Ok(w) => {
+                    watch_drags(&w);
+                    w
+                }
                 Err(e) => {
                     eprintln!("andromeda: cannot open {label}: {e}");
                     return;
@@ -411,11 +480,10 @@ fn main() {
                         .ok()
                         .and_then(|g| g.get(label).copied())
                         .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
-                    let sticky = times
-                        .sticky
-                        .lock()
-                        .is_ok_and(|g| g.get(label).copied().unwrap_or(false));
-                    if just_shown || sticky || !window.is_visible().unwrap_or(false) {
+                    if just_shown
+                        || is_held(window.app_handle(), label)
+                        || !window.is_visible().unwrap_or(false)
+                    {
                         return;
                     }
                     if let Ok(mut g) = times.blur_hidden.lock() {
@@ -427,6 +495,9 @@ fn main() {
             }
         })
         .setup(move |app| {
+            if let Some(main) = app.get_webview_window("main") {
+                watch_drags(&main);
+            }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = dbus_main(handle).await {

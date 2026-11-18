@@ -47,12 +47,14 @@ version = "0.1.0"
 dependencies = [
  "andromeda-core",
  "futures-util",
+ "gtk",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",
  "tokio",
+ "webkit2gtk",
  "zbus 6.3.0",
 ]
 
