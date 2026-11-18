@@ -16,6 +16,7 @@ enum Page {
     General,
     Features,
     TopBar,
+    Shortcuts,
     Alerts,
     Mixer,
     Awake,
@@ -24,10 +25,11 @@ enum Page {
 }
 
 impl Page {
-    const ALL: [Page; 8] = [
+    const ALL: [Page; 9] = [
         Page::General,
         Page::Features,
         Page::TopBar,
+        Page::Shortcuts,
         Page::Alerts,
         Page::Mixer,
         Page::Awake,
@@ -39,6 +41,7 @@ impl Page {
             Page::General => "General",
             Page::Features => "Features",
             Page::TopBar => "Top bar",
+            Page::Shortcuts => "Shortcuts",
             Page::Alerts => "Alerts",
             Page::Mixer => "Volume mixer",
             Page::Awake => "Keep awake",
@@ -51,6 +54,7 @@ impl Page {
         match self {
             Page::General => "login startup update version",
             Page::Features => "tabs enable disable on off switch",
+            Page::Shortcuts => "keyboard keys keybind hotkey ocr color picker microphone mute",
             Page::TopBar => {
                 "panel numbers metrics order temperature position left right vitals icons shelf files converter clipboard history images"
             }
@@ -269,6 +273,223 @@ fn TopBar() -> impl IntoView {
                 }
             }).collect_view()}
         }).collect_view()}
+    }
+}
+
+/// "Super + Shift + T" for "<Super><Shift>t"; "Off" for "".
+fn accel_label(accel: &str) -> String {
+    if accel.is_empty() {
+        return "Off".into();
+    }
+    let (mods, key) = match accel.rfind('>') {
+        Some(i) => accel.split_at(i + 1),
+        None => ("", accel),
+    };
+    let mut parts: Vec<String> = mods
+        .split(['<', '>'])
+        .filter(|m| !m.is_empty())
+        .map(|m| {
+            if m == "Control" {
+                "Ctrl".into()
+            } else {
+                m.to_owned()
+            }
+        })
+        .collect();
+    parts.push(match key {
+        "space" => "Space".into(),
+        k if k.chars().count() == 1 => k.to_uppercase(),
+        k => k.replace('_', " "),
+    });
+    parts.join(" + ")
+}
+
+/// GTK key name for a key press, or None for a modifier on its own.
+/// Letters come from `key` (respects the keyboard layout, e.g. QWERTZ),
+/// digits from `code` (Shift+1 would otherwise be "!").
+fn key_name(e: &leptos::ev::KeyboardEvent) -> Option<String> {
+    let key = e.key();
+    let code = e.code();
+    if let Some(d) = code.strip_prefix("Digit") {
+        return Some(d.to_owned());
+    }
+    let mut chars = key.chars();
+    if let (Some(c), None) = (chars.next(), chars.next())
+        && c.is_alphabetic()
+    {
+        return Some(c.to_lowercase().collect());
+    }
+    let named = match key.as_str() {
+        "Shift" | "Control" | "Alt" | "Meta" | "OS" | "Super" | "Hyper" | "AltGraph" => {
+            return None;
+        }
+        " " => "space",
+        "ArrowLeft" => "Left",
+        "ArrowRight" => "Right",
+        "ArrowUp" => "Up",
+        "ArrowDown" => "Down",
+        "PageUp" => "Page_Up",
+        "PageDown" => "Page_Down",
+        "Home" | "End" | "Insert" | "Delete" | "Print" | "Pause" | "Tab" => key.as_str(),
+        k if k.len() <= 3 && k.starts_with('F') && k[1..].parse::<u8>().is_ok() => k,
+        _ => return None,
+    };
+    Some(named.to_owned())
+}
+
+/// One row of the Shortcuts page.
+struct ShortcutRow {
+    label: &'static str,
+    hint: &'static str,
+    get: fn(&Config) -> String,
+    set: fn(&mut Config, String),
+}
+
+const SHORTCUTS: [ShortcutRow; 5] = [
+    ShortcutRow {
+        label: "Show or hide the panel",
+        hint: "",
+        get: |c| c.shortcuts.panel.clone(),
+        set: |c, v| c.shortcuts.panel = v,
+    },
+    ShortcutRow {
+        label: "Copy text from screen",
+        hint: "Select an area; its text or QR code is copied.",
+        get: |c| c.shortcuts.copy_text.clone(),
+        set: |c, v| c.shortcuts.copy_text = v,
+    },
+    ShortcutRow {
+        label: "Pick a color",
+        hint: "Click any pixel; its hex code is copied.",
+        get: |c| c.shortcuts.pick_color.clone(),
+        set: |c, v| c.shortcuts.pick_color = v,
+    },
+    ShortcutRow {
+        label: "Keep awake on or off",
+        hint: "On for the time set under Keep awake.",
+        get: |c| c.shortcuts.keep_awake.clone(),
+        set: |c, v| c.shortcuts.keep_awake = v,
+    },
+    ShortcutRow {
+        label: "Microphone on or off",
+        hint: "",
+        get: |c| c.shortcuts.mic_mute.clone(),
+        set: |c, v| c.shortcuts.mic_mute = v,
+    },
+];
+
+#[component]
+fn Shortcuts() -> impl IntoView {
+    let d = data();
+    // Row being recorded, and whether Super is held (WebKitGTK does not
+    // always report it as metaKey).
+    let recording = RwSignal::new(None::<usize>);
+    let super_held = RwSignal::new(false);
+    let note = RwSignal::new(String::new());
+    let current = move |i: usize| {
+        d.config.with(|c| {
+            c.as_ref()
+                .map(|c| (SHORTCUTS[i].get)(c))
+                .unwrap_or_default()
+        })
+    };
+
+    let up = window_event_listener(leptos::ev::keyup, move |e| {
+        if matches!(e.key().as_str(), "Meta" | "OS" | "Super" | "Hyper") {
+            super_held.set(false);
+        }
+    });
+    let down = window_event_listener(leptos::ev::keydown, move |e| {
+        let Some(i) = recording.get_untracked() else {
+            return;
+        };
+        e.prevent_default();
+        e.stop_propagation();
+        let plain = !(e.ctrl_key() || e.alt_key() || e.meta_key() || super_held.get_untracked());
+        match e.key().as_str() {
+            "Meta" | "OS" | "Super" | "Hyper" => {
+                super_held.set(true);
+                return;
+            }
+            "Escape" if plain => {
+                recording.set(None);
+                return;
+            }
+            "Backspace" | "Delete" if plain => {
+                d.edit_config(|c| (SHORTCUTS[i].set)(c, String::new()));
+                recording.set(None);
+                return;
+            }
+            _ => {}
+        }
+        let Some(key) = key_name(&e) else {
+            return;
+        };
+        let function_key =
+            key.starts_with('F') && key.len() > 1 || key == "Print" || key == "Pause";
+        if plain && !function_key {
+            note.set(
+                "Add Super, Ctrl or Alt, so the shortcut does not take a normal key away.".into(),
+            );
+            return;
+        }
+        let mut accel = String::new();
+        if e.meta_key() || super_held.get_untracked() {
+            accel.push_str("<Super>");
+        }
+        if e.ctrl_key() {
+            accel.push_str("<Control>");
+        }
+        if e.alt_key() {
+            accel.push_str("<Alt>");
+        }
+        if e.shift_key() {
+            accel.push_str("<Shift>");
+        }
+        accel.push_str(&key);
+        let taken = (0..SHORTCUTS.len()).find(|&j| j != i && current(j) == accel);
+        if let Some(j) = taken {
+            note.set(format!(
+                "{} is already used for \"{}\".",
+                accel_label(&accel),
+                SHORTCUTS[j].label
+            ));
+            return;
+        }
+        note.set(String::new());
+        d.edit_config(move |c| (SHORTCUTS[i].set)(c, accel));
+        recording.set(None);
+    });
+    on_cleanup(move || {
+        up.remove();
+        down.remove();
+    });
+
+    view! {
+        <h2>"Shortcuts"</h2>
+        <p class="muted">"They work in every app. Click Change, then press the new keys. Escape cancels, Backspace turns a shortcut off."</p>
+        {(0..SHORTCUTS.len()).map(|i| {
+            let row = &SHORTCUTS[i];
+            view! {
+                <div class="setting">
+                    <div class="grow">
+                        <div>{row.label}</div>
+                        {(!row.hint.is_empty()).then(|| view! { <div class="muted small">{row.hint}</div> })}
+                    </div>
+                    <span class="keys" class:recording=move || recording.get() == Some(i)>
+                        {move || if recording.get() == Some(i) { "Press keys…".to_owned() } else { accel_label(&current(i)) }}
+                    </span>
+                    <button class="btn small-btn" on:click=move |_| {
+                        note.set(String::new());
+                        super_held.set(false);
+                        recording.set(if recording.get_untracked() == Some(i) { None } else { Some(i) });
+                    }>{move || if recording.get() == Some(i) { "Cancel" } else { "Change" }}</button>
+                </div>
+            }
+        }).collect_view()}
+        <p class="small warn-text">{move || note.get()}</p>
+        <p class="muted small">"A shortcut GNOME already uses (Settings → Keyboard) cannot be recorded here; pick another one."</p>
+        <button class="btn small-btn" on:click=move |_| { recording.set(None); d.edit_config(|c| c.shortcuts = Default::default()); }>"Restore defaults"</button>
     }
 }
 
@@ -512,6 +733,7 @@ pub fn Settings() -> impl IntoView {
                         Page::General => view! { <General /> }.into_any(),
                         Page::Features => view! { <Features /> }.into_any(),
                         Page::TopBar => view! { <TopBar /> }.into_any(),
+                        Page::Shortcuts => view! { <Shortcuts /> }.into_any(),
                         Page::Alerts => view! { <Alerts /> }.into_any(),
                         Page::Mixer => view! { <Mixer /> }.into_any(),
                         Page::Awake => view! { <Awake /> }.into_any(),

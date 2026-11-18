@@ -299,6 +299,15 @@ input, select { text-shadow: none; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
 .setting .chips { margin: 0; flex-wrap: nowrap; }
+/* A shortcut ("Super + Shift + T") in Settings → Shortcuts. */
+.keys {
+  padding: 3px var(--s2);
+  border-radius: var(--r-control);
+  background: var(--field);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.keys.recording { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
 .chip { padding: 4px var(--s3); border-radius: var(--r-pill); font-size: 13px; }
 
 /* Text fields and drop-downs. */

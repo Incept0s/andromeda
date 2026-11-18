@@ -21,6 +21,7 @@ pub struct Config {
     /// Extra top-bar icons for tools (right of the open apps).
     pub icons: Icons,
     pub shelf: Shelf,
+    pub shortcuts: Shortcuts,
     pub alerts: Alerts,
     pub mixer: Mixer,
     pub awake: Awake,
@@ -99,6 +100,50 @@ impl Default for Shelf {
         Self {
             keep_hours: Some(24),
         }
+    }
+}
+
+/// Keyboard shortcuts, as GTK accelerators ("<Super><Shift>t"); empty =
+/// off. The Shell extension registers them (it mirrors these into its own
+/// GSettings, which is what Mutter reads), so they work in every app.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Shortcuts {
+    /// Show or hide the panel.
+    pub panel: String,
+    /// Copy text (or a QR code) from an area of the screen.
+    pub copy_text: String,
+    /// Pick a color anywhere on screen; its hex code is copied.
+    pub pick_color: String,
+    /// Keep awake on/off (on for the default duration).
+    pub keep_awake: String,
+    /// Microphone mute on/off.
+    pub mic_mute: String,
+}
+
+impl Default for Shortcuts {
+    /// Free on a stock GNOME 50 (Super+A is taken from "Show apps").
+    fn default() -> Self {
+        Self {
+            panel: "<Super>a".into(),
+            copy_text: "<Super><Shift>t".into(),
+            pick_color: "<Super><Shift>c".into(),
+            keep_awake: "<Super><Shift>k".into(),
+            mic_mute: "<Super><Shift>m".into(),
+        }
+    }
+}
+
+impl Shortcuts {
+    /// Every shortcut string, for code that treats them alike.
+    pub fn all_mut(&mut self) -> [&mut String; 5] {
+        [
+            &mut self.panel,
+            &mut self.copy_text,
+            &mut self.pick_color,
+            &mut self.keep_awake,
+            &mut self.mic_mute,
+        ]
     }
 }
 
@@ -216,6 +261,14 @@ impl Config {
             *b = (*b).clamp(1, 99);
         }
         self.awake.default_minutes = self.awake.default_minutes.min(24 * 60);
+        // Accelerators are short ASCII like "<Super><Shift>t"; anything else
+        // (a broken hand edit) switches that shortcut off.
+        for s in self.shortcuts.all_mut() {
+            let ok = s.len() <= 64 && s.chars().all(|c| c.is_ascii_graphic());
+            if !ok {
+                s.clear();
+            }
+        }
         if let Some(h) = &mut self.shelf.keep_hours {
             *h = (*h).clamp(1, 24 * 30);
         }
@@ -289,6 +342,7 @@ mod tests {
         let mut c = Config::default();
         c.mixer.max_volume = 900;
         c.awake.stop_below_battery = Some(0);
+        c.shortcuts.mic_mute = "<Super>\u{e9}\n".into();
         c.topbar = Some(vec!["a".into(), "b".into(), "a".into()]);
         c.alerts.rules.push(AlertRule {
             metric: "x".into(),
@@ -299,8 +353,13 @@ mod tests {
         c.sanitize();
         assert_eq!(c.mixer.max_volume, 200);
         assert_eq!(c.awake.stop_below_battery, Some(1));
+        assert_eq!(c.shortcuts.copy_text, "<Super><Shift>t");
         assert_eq!(c.topbar, Some(vec!["a".into(), "b".into()]));
         assert!(c.alerts.rules.iter().all(|r| r.threshold.is_finite()));
+        assert_eq!(
+            c.shortcuts.mic_mute, "",
+            "invalid accelerator is switched off"
+        );
     }
 
     #[test]

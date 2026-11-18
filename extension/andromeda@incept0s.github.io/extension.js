@@ -41,6 +41,15 @@ const TEXT_TYPES = ['text/plain', 'text/plain;charset=utf-8', 'UTF8_STRING', 'ST
 // network, VPN, sound and battery icons). Andromeda's icons go just before.
 const SYSTEM_ROLES = ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'];
 
+// Andromeda setting (config.shortcuts) → GSettings key of this extension.
+const SHORTCUT_KEYS = {
+    panel: 'toggle-panel',
+    copy_text: 'copy-text',
+    pick_color: 'pick-color',
+    keep_awake: 'toggle-awake',
+    mic_mute: 'toggle-mic-mute',
+};
+
 function firstSystemItem(box) {
     const system = SYSTEM_ROLES.map(r => Main.panel.statusArea[r]?.container).filter(Boolean);
     return box.get_children().find(c => system.includes(c)) ?? null;
@@ -59,6 +68,17 @@ function placeBefore(box, actor, sibling) {
     } else {
         box.set_child_above_sibling(actor, null);
     }
+}
+
+/** GNOME's on-screen display (as for volume keys), icon and text only. */
+function osd(iconName, label) {
+    Main.osdWindowManager.showAll(Gio.ThemedIcon.new(iconName), label);
+}
+
+/** "20:15" for Unix seconds, in the user's time zone. */
+function clock(unixSeconds) {
+    const t = GLib.DateTime.new_from_unix_local(Number(unixSeconds));
+    return t ? t.format('%H:%M') : '';
 }
 
 /** Moves `actor` to the start of `box`. */
@@ -122,6 +142,18 @@ export default class AndromedaExtension extends Extension {
         this._freeShortcuts();
         Main.wm.addKeybinding('toggle-panel', this._settings, Meta.KeyBindingFlags.NONE,
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW, () => this._toggle());
+        // The other shortcuts (Settings → Shortcuts). The work happens in the
+        // daemon; this only starts it and shows GNOME's on-screen display.
+        const actions = {
+            'copy-text': () => this._job('ocr'),
+            'pick-color': () => this._job('pick_color'),
+            'toggle-awake': () => this._toggleAwake(),
+            'toggle-mic-mute': () => this._toggleMicMute(),
+        };
+        for (const [key, action] of Object.entries(actions)) {
+            Main.wm.addKeybinding(key, this._settings, Meta.KeyBindingFlags.NONE,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW, action);
+        }
 
         // Hiding a GTK window on Wayland destroys its surface, so every
         // show creates a new MetaWindow and we place it again.
@@ -160,7 +192,8 @@ export default class AndromedaExtension extends Extension {
     }
 
     disable() {
-        Main.wm.removeKeybinding('toggle-panel');
+        for (const key of Object.values(SHORTCUT_KEYS))
+            Main.wm.removeKeybinding(key);
         this._restoreShortcuts();
         this._settings = null;
         global.display.disconnect(this._windowCreatedId);
@@ -277,9 +310,72 @@ export default class AndromedaExtension extends Extension {
             // Keep the defaults below.
         }
         this._setSwitcher(c.features?.switcher === true);
+        if (c.shortcuts)
+            this._syncShortcuts(c.shortcuts);
         this._side = c.topbar_side === 'Left' ? 'Left' : 'Right';
         this._tools.applyConfig(c);
         this._layout();
+    }
+
+    /** Mirrors the shortcuts from Andromeda's settings into GSettings. */
+    _syncShortcuts(shortcuts) {
+        for (const [field, key] of Object.entries(SHORTCUT_KEYS)) {
+            if (typeof shortcuts[field] !== 'string')
+                continue;
+            const want = shortcuts[field] ? [shortcuts[field]] : [];
+            const have = this._settings.get_strv(key);
+            if (want.join() === have.join())
+                continue;
+            // A new panel shortcut: give GNOME back what Super+A took, then
+            // take the new one if "Show apps" uses it.
+            if (key === 'toggle-panel')
+                this._restoreShortcuts();
+            this._settings.set_strv(key, want);
+            if (key === 'toggle-panel')
+                this._freeShortcuts();
+        }
+    }
+
+    /** Starts a daemon job (copy text, pick color); it reports by notification. */
+    _job(kind) {
+        Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, 'Job',
+            new GLib.Variant('(sas)', [kind, []]), null, Gio.DBusCallFlags.NONE, -1, null, (conn, res) => {
+                try {
+                    conn.call_finish(res);
+                } catch (e) {
+                    console.warn(`Andromeda: ${kind} failed: ${e.message}`);
+                }
+            });
+    }
+
+    /** Calls a daemon method without arguments; `done` gets its first result. */
+    _callDaemon(method, done) {
+        Gio.DBus.session.call(DAEMON_NAME, DAEMON_PATH, DAEMON_IFACE, method,
+            null, null, Gio.DBusCallFlags.NONE, -1, null, (conn, res) => {
+                try {
+                    done(conn.call_finish(res).deep_unpack()[0]);
+                } catch (e) {
+                    const msg = Gio.DBusError.strip_remote_error(e) ?? e.message;
+                    osd('dialog-warning-symbolic', msg);
+                }
+            });
+    }
+
+    _toggleAwake() {
+        this._callDaemon('AwakeToggle', until => {
+            if (until < 0)
+                osd('weather-clear-night-symbolic', 'Keep awake off');
+            else if (until === 0)
+                osd('display-brightness-symbolic', 'Keep awake on');
+            else
+                osd('display-brightness-symbolic', `Keep awake until ${clock(until)}`);
+        });
+    }
+
+    _toggleMicMute() {
+        this._callDaemon('MicMuteToggle', muted => osd(
+            muted ? 'microphone-sensitivity-muted-symbolic' : 'audio-input-microphone-symbolic',
+            muted ? 'Microphone off' : 'Microphone on'));
     }
 
     _setSwitcher(on) {

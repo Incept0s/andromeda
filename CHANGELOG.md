@@ -22,6 +22,11 @@ All notable changes to Andromeda are listed here. The format follows
   with the history; click an entry to make it the clipboard again, the
   window closes so you can paste.
 
+- Keyboard shortcuts (Settings → Shortcuts, all changeable): copy text from
+  screen (Super+Shift+T), pick a color (Super+Shift+C), keep awake on/off
+  (Super+Shift+K), microphone on/off (Super+Shift+M), and the panel
+  (Super+A). Keep awake and the microphone show GNOME's on-screen display.
+
 ### Changed
 
 - Top bar: the numbers are their own item and can sit right of the clock

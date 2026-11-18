@@ -59,6 +59,10 @@ And outside the panel:
 - **Clipboard history in the top bar** (optional). Your last copied texts and
   images (screenshots, "Copy image"), click one and it is your clipboard
   again. Password-manager copies are never kept.
+- **Keyboard shortcuts** that work in every app, changeable in Settings →
+  Shortcuts: Super+Shift+T copies text from the screen, Super+Shift+C picks
+  a color, Super+Shift+K turns keep awake on or off, Super+Shift+M mutes the
+  microphone.
 - **Alt+Tab with large previews.** One live preview per window, minimized
   windows included, grouped by app.
 - **Alerts.** A GNOME notification when a reading stays past a limit you set:

@@ -5,6 +5,24 @@
       <default>['&lt;Super&gt;a']</default>
       <summary>Show or hide the Andromeda panel</summary>
     </key>
+    <!-- Copies of the shortcuts in Andromeda's settings (Settings → Shortcuts);
+         the extension keeps them in sync. Mutter reads keybindings from here. -->
+    <key name="copy-text" type="as">
+      <default>['&lt;Super&gt;&lt;Shift&gt;t']</default>
+      <summary>Copy text from an area of the screen</summary>
+    </key>
+    <key name="pick-color" type="as">
+      <default>['&lt;Super&gt;&lt;Shift&gt;c']</default>
+      <summary>Pick a color on screen</summary>
+    </key>
+    <key name="toggle-awake" type="as">
+      <default>['&lt;Super&gt;&lt;Shift&gt;k']</default>
+      <summary>Keep awake on or off</summary>
+    </key>
+    <key name="toggle-mic-mute" type="as">
+      <default>['&lt;Super&gt;&lt;Shift&gt;m']</default>
+      <summary>Mute or unmute the microphone</summary>
+    </key>
     <key name="freed-shortcuts" type="as">
       <default>[]</default>
       <summary>Shortcuts taken from GNOME's "Show apps", given back when the extension is disabled</summary>

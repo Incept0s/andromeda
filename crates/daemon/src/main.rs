@@ -269,6 +269,32 @@ impl Daemon {
         let _ = self.awake_until_changed(&e).await;
     }
 
+    /// Keep awake on (for the default duration) or off, for the keyboard
+    /// shortcut. Returns the new `AwakeUntil` value.
+    async fn awake_toggle(
+        &mut self,
+        #[zbus(signal_emitter)] e: SignalEmitter<'_>,
+    ) -> fdo::Result<i64> {
+        if !self.config.features.awake {
+            return Err(fdo::Error::Failed(
+                "Keep awake is switched off in Settings.".into(),
+            ));
+        }
+        if self.awake_until >= 0 {
+            self.awake_off().await;
+        } else {
+            self.awake_on(self.config.awake.default_minutes).await?;
+        }
+        let _ = self.awake_until_changed(&e).await;
+        Ok(self.awake_until)
+    }
+
+    /// Mutes or unmutes the default microphone, for the keyboard shortcut.
+    /// Returns whether it is now muted.
+    async fn mic_mute_toggle(&self) -> fdo::Result<bool> {
+        desktop::toggle_mic_mute().await.map_err(fdo::Error::Failed)
+    }
+
     /// (active profile, available profiles), e.g. ("balanced",
     /// ["power-saver", "balanced", "performance"]). Empty when
     /// power-profiles-daemon is not running.

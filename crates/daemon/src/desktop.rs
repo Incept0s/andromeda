@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Small clients for desktop D-Bus services: notifications, GNOME's
-//! session inhibitor (keep awake) and power-profiles-daemon.
+//! session inhibitor (keep awake) and power-profiles-daemon. Also the
+//! microphone mute switch (PipeWire's wpctl).
 
 use std::collections::HashMap;
 
@@ -79,4 +80,40 @@ pub trait PowerProfiles {
     fn set_active_profile(&self, profile: &str) -> zbus::Result<()>;
     #[zbus(property)]
     fn profiles(&self) -> zbus::Result<Vec<HashMap<String, zbus::OwnedVariant>>>;
+}
+
+/// Mutes or unmutes the default microphone; returns whether it is now muted.
+/// PipeWire's own tool, run once per key press.
+pub async fn toggle_mic_mute() -> Result<bool, String> {
+    const SOURCE: &str = "@DEFAULT_AUDIO_SOURCE@";
+    let missing = |_| "wpctl (PipeWire) is needed to mute the microphone.".to_owned();
+    let set = tokio::process::Command::new("wpctl")
+        .args(["set-mute", SOURCE, "toggle"])
+        .status()
+        .await
+        .map_err(missing)?;
+    if !set.success() {
+        return Err("No microphone found.".into());
+    }
+    let out = tokio::process::Command::new("wpctl")
+        .args(["get-volume", SOURCE])
+        .output()
+        .await
+        .map_err(missing)?;
+    Ok(is_muted(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// `wpctl get-volume` prints "Volume: 0.19" or "Volume: 0.19 [MUTED]".
+fn is_muted(wpctl_output: &str) -> bool {
+    wpctl_output.contains("[MUTED]")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn reads_wpctl_mute_state() {
+        assert!(!super::is_muted("Volume: 0.19\n"));
+        assert!(super::is_muted("Volume: 0.19 [MUTED]\n"));
+        assert!(!super::is_muted(""));
+    }
 }
