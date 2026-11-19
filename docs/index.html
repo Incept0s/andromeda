@@ -22,179 +22,277 @@
   <link rel="stylesheet" href="site.css">
 </head>
 <body>
+  <!-- Lucide icons used more than once -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-galaxy" viewBox="0 0 16 16"><g fill="currentColor" fill-rule="evenodd" transform="rotate(-32 8 8)"><path d="M8 4.3c4.1 0 7.5 1.7 7.5 3.7S12.1 11.7 8 11.7.5 10 .5 8 3.9 4.3 8 4.3zm0 1C4.4 5.3 1.5 6.5 1.5 8s2.9 2.7 6.5 2.7 6.5-1.2 6.5-2.7S11.6 5.3 8 5.3z"/><path d="M8 6c2.5 0 4.5.9 4.5 2S10.5 10 8 10 3.5 9.1 3.5 8 5.5 6 8 6zm0 .9C6 6.9 4.5 7.4 4.5 8S6 9.1 8 9.1s3.5-.5 3.5-1.1S10 6.9 8 6.9z"/><ellipse cx="8" cy="8" rx="1.5" ry="1"/></g></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><path d="M12 20v2M12 2v2M17 20v2M17 2v2M2 12h2M2 17h2M2 7h2M20 12h2M20 17h2M20 7h2M7 20v2M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M10 5H3M12 19H3M14 3v4M16 17v4M21 12h-9M21 19h-5M21 5h-7M8 10v4M8 12H3"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+      <symbol id="i-drive" viewBox="0 0 24 24"><path d="M10 16h.01M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11zM21.946 12.013H2.054M6 16h.01"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></symbol>
+      <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></symbol>
+      <symbol id="i-toggle" viewBox="0 0 24 24"><circle cx="15" cy="12" r="3"/><rect width="20" height="14" x="2" y="5" rx="7"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73zM12 22V12"/><path d="M3.29 7 12 12l8.71-5M7.5 4.27l9 5.15"/></symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4M9 18c-4.51 2-5-2-7-2"/></symbol>
+    </defs>
+  </svg>
+
   <header class="nav">
     <div class="wrap">
-      <a class="brand" href="#top"><img src="assets/andromeda.svg" alt="">Andromeda</a>
+      <a class="brand" href="#top"><svg><use href="#i-galaxy"/></svg>Andromeda</a>
       <nav class="links" aria-label="Sections">
-        <a href="#features">Features</a>
+        <a href="#tour">Tour</a>
+        <a href="#topbar">Top bar</a>
+        <a href="#shortcuts">Shortcuts</a>
         <a href="#install">Install</a>
-        <a href="#privacy">Privacy</a>
-        <a href="https://github.com/Incept0s/andromeda">GitHub</a>
+        <a class="gh" href="https://github.com/Incept0s/andromeda" aria-label="GitHub"><svg><use href="#i-github"/></svg></a>
       </nav>
     </div>
   </header>
 
   <main id="top">
-    <div class="hero wrap">
-      <img class="logo" src="assets/andromeda.svg" alt="Andromeda icon">
-      <h1>Andromeda</h1>
-      <p class="tagline">System monitor, volume mixer and toolbox behind one icon in the GNOME top bar.</p>
-      <div class="chips">
-        <span class="chip">Fedora 44+</span><span class="chip">GNOME 50</span><span class="chip">Wayland</span>
-        <span class="chip">Rust</span><span class="chip">Free software (GPL-3.0)</span>
+    <!-- ============ hero: a desktop, with the panel open ============ -->
+    <section class="hero">
+      <div class="wrap hero-text">
+        <p class="eyebrow">For Fedora GNOME on Wayland</p>
+        <h1>Your whole system,<br><span class="glow">one click away.</span></h1>
+        <p class="lede">Temperatures, every GPU, per-app volume, clipboard history, screen text, file conversion and more, in one glass panel under one icon in the top bar.</p>
+        <div class="actions">
+          <a class="btn primary" id="dl" href="https://github.com/Incept0s/andromeda/releases"><svg><use href="#i-download"/></svg>Download RPM</a>
+          <a class="btn" href="https://github.com/Incept0s/andromeda"><svg><use href="#i-github"/></svg>Source on GitHub</a>
+        </div>
+        <p class="note"><span id="ver">0.1.0 pre-release</span> · Fedora 44+ · GNOME 50 · GPL-3.0 · written in Rust</p>
       </div>
-      <div class="actions">
-        <a class="btn primary" href="https://github.com/Incept0s/andromeda/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>Download RPM</a>
-        <a class="btn" href="https://github.com/Incept0s/andromeda">View on GitHub</a>
-      </div>
-      <p class="note">Version 0.1.0 · pre-release</p>
-      <img class="shot panel-shot" src="assets/panel.png" width="440" height="600" alt="The Andromeda panel: tabs, temperatures, usage bars and graphs on dark glass">
-    </div>
 
-    <section id="features" class="wrap">
-      <div class="section-title">
-        <h2>Everything in one place</h2>
-        <p>The utilities you would otherwise install one by one, in a single panel that opens right under its icon.</p>
+      <div class="desk wrap" aria-label="Illustration: the GNOME top bar with Andromeda's numbers and icons, and its panel open below">
+        <div class="galaxy" aria-hidden="true"></div>
+        <div class="bar" aria-hidden="true">
+          <span class="dots"><i class="on"></i><i></i><i></i><i></i></span>
+          <span class="clock">Thu 19 Nov&ensp;14:32</span>
+          <span class="nums" id="nums">CPU <b data-v="cpu">73</b>°&ensp;RAM <b data-v="ram">21</b>%&ensp;RTX <b data-v="gpu">53</b>°</span>
+          <span class="right">
+            <svg><use href="#i-package"/></svg>
+            <svg><use href="#i-repeat"/></svg>
+            <svg><use href="#i-clipboard"/></svg>
+            <svg class="me"><use href="#i-galaxy"/></svg>
+            <span class="sys"><i></i><i></i><i></i></span>
+          </span>
+        </div>
+        <img class="panel" src="screenshots/panel-system.png" width="380" height="680" alt="The Andromeda panel, System tab: CPU and GPU temperatures, usage bars with live graphs, Settings and Quit buttons, on dark frosted glass">
       </div>
+    </section>
+
+    <!-- ============ tour of the eight tabs ============ -->
+    <section id="tour" class="wrap">
+      <div class="section-title">
+        <h2>Eight tabs. No hunting.</h2>
+        <p>The utilities you would otherwise install one by one, sorted the way the panel sorts them.</p>
+      </div>
+
+      <div class="tour glass">
+        <div class="tabs" role="tablist" aria-label="Panel tabs">
+          <button role="tab" aria-selected="true" aria-controls="t-system" id="b-system"><svg><use href="#i-cpu"/></svg><span>System</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-mixer" id="b-mixer"><svg><use href="#i-sliders"/></svg><span>Mixer</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-network" id="b-network"><svg><use href="#i-globe"/></svg><span>Network</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-disks" id="b-disks"><svg><use href="#i-drive"/></svg><span>Disks</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-energy" id="b-energy"><svg><use href="#i-zap"/></svg><span>Energy</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-awake" id="b-awake"><svg><use href="#i-moon"/></svg><span>Keep awake</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-tools" id="b-tools"><svg><use href="#i-wrench"/></svg><span>Tools</span></button>
+          <button role="tab" aria-selected="false" aria-controls="t-controls" id="b-controls"><svg><use href="#i-toggle"/></svg><span>Controls</span></button>
+        </div>
+
+        <div class="pane with-shot" role="tabpanel" id="t-system" aria-labelledby="b-system">
+          <div>
+          <h3>System</h3>
+          <p>Everything your machine is doing, read straight from the kernel.</p>
+          <ul>
+            <li>CPU load per core, frequency and temperature</li>
+            <li>Every GPU: AMD and Intel through the kernel, NVIDIA through its driver</li>
+            <li>Memory, swap and memory pressure</li>
+            <li>All temperatures and fans the hardware reports</li>
+            <li>Battery health, uptime, live graphs</li>
+          </ul>
+          </div>
+          <img class="pane-shot" src="screenshots/panel-system.png" width="380" height="680" loading="lazy" alt="System tab: CPU and GPU temperatures, usage bars with live graphs, memory pressure">
+        </div>
+        <div class="pane with-shot" role="tabpanel" id="t-mixer" aria-labelledby="b-mixer" hidden>
+          <div>
+          <h3>Volume mixer</h3>
+          <p>Every app that plays sound gets its own slider, through PipeWire.</p>
+          <ul>
+            <li>Volume per app, with boost above 100 %</li>
+            <li>Mute any app on its own</li>
+            <li>Send each app to a different speaker or headset</li>
+            <li>System output and microphone</li>
+          </ul>
+          </div>
+          <img class="pane-shot" src="screenshots/panel-mixer.png" width="380" height="680" loading="lazy" alt="Volume mixer tab: Brave, Firefox, Rhythmbox and Videos, each with its own slider and output device">
+        </div>
+        <div class="pane" role="tabpanel" id="t-network" aria-labelledby="b-network" hidden>
+          <h3>Network</h3>
+          <p>What is moving, where and through which interface.</p>
+          <ul>
+            <li>Live download and upload speed, session totals</li>
+            <li>Interfaces with their addresses</li>
+            <li>Apps with open connections</li>
+            <li>A speed test, only when you press the button</li>
+          </ul>
+        </div>
+        <div class="pane" role="tabpanel" id="t-disks" aria-labelledby="b-disks" hidden>
+          <h3>Disks</h3>
+          <p>Space, speed and health of every drive.</p>
+          <ul>
+            <li>Free and used space per volume</li>
+            <li>Read and write speed, live</li>
+            <li>Drive health from SMART</li>
+            <li>Safe eject for USB drives</li>
+          </ul>
+        </div>
+        <div class="pane" role="tabpanel" id="t-energy" aria-labelledby="b-energy" hidden>
+          <h3>Energy</h3>
+          <p>Where the battery goes.</p>
+          <ul>
+            <li>Battery level, health, charge cycles and power flow in watts</li>
+            <li>Power mode: power saver, balanced, performance</li>
+            <li>Batteries of your mouse and headset</li>
+            <li>The apps using the most CPU right now</li>
+          </ul>
+        </div>
+        <div class="pane" role="tabpanel" id="t-awake" aria-labelledby="b-awake" hidden>
+          <h3>Keep awake</h3>
+          <p>For downloads, presentations and long builds.</p>
+          <ul>
+            <li>No suspend and no screen blanking, from 15 minutes to "until I turn it off"</li>
+            <li>Ends on its own when the battery runs low</li>
+            <li>One shortcut away: <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></li>
+          </ul>
+        </div>
+        <div class="pane with-shot" role="tabpanel" id="t-tools" aria-labelledby="b-tools" hidden>
+          <div>
+          <h3>Tools</h3>
+          <p>Small jobs that otherwise need an app each. All of them run on your computer.</p>
+          <ul>
+            <li><b>Clipboard history</b> for text and images, searchable</li>
+            <li><b>Copy text from screen</b>: pick an area, its text or QR code is copied</li>
+            <li><b>Color picker</b> for any pixel on screen</li>
+            <li><b>File converter</b>: images, audio, video, documents, GIFs, compression</li>
+            <li><b>Cleaner</b>: caches, Trash, leftovers; shows everything before it deletes</li>
+            <li><b>Packages</b>: search, install and update RPM and Flatpak apps</li>
+            <li><b>Shelf</b>: park files and drag them out again later</li>
+          </ul>
+          </div>
+          <img class="pane-shot" src="screenshots/panel-tools.png" width="380" height="680" loading="lazy" alt="Tools tab: clipboard, copy text from screen, pick a color, convert files, clean up, packages, shelf">
+        </div>
+        <div class="pane" role="tabpanel" id="t-controls" aria-labelledby="b-controls" hidden>
+          <h3>Controls</h3>
+          <p>Quick switches for what runs in the background.</p>
+          <ul>
+            <li>Alt+Tab switcher, clipboard history, alerts, top-bar numbers</li>
+            <li>Everything else lives in Settings, which uses the same glass look</li>
+            <li>Every feature can be switched off; missing hardware simply hides what needs it</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ top bar ============ -->
+    <section id="topbar" class="wrap">
+      <div class="section-title">
+        <h2>Lives in the top bar</h2>
+        <p>Plain numbers instead of graphs, and three optional drop targets for your files and copies.</p>
+      </div>
+
+      <figure class="strip">
+        <img src="screenshots/topbar.png" width="740" height="32" alt="GNOME top bar: CPU 76°, RAM 22%, RTX 53°, download speed, then the shelf with 3 files, converter, clipboard and Andromeda icons">
+        <figcaption>Pick the readings and their order in Settings → Top bar; put them right of the clock or at the far left.</figcaption>
+      </figure>
+
+      <div class="split shelf">
+        <img class="shot" src="screenshots/shelf.png" width="392" height="529" loading="lazy" alt="The shelf window under its top-bar icon, holding three files with buttons to drag, copy or remove each">
       <div class="grid">
         <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v2" /><path d="M12 2v2" /><path d="M17 20v2" /><path d="M17 2v2" /><path d="M2 12h2" /><path d="M2 17h2" /><path d="M2 7h2" /><path d="M20 12h2" /><path d="M20 17h2" /><path d="M20 7h2" /><path d="M7 20v2" /><path d="M7 2v2" /><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="8" y="8" width="8" height="8" rx="1" /></svg></div>
-          <h3>System</h3>
-          <p>CPU, every GPU (AMD, Intel, NVIDIA), memory pressure, temperatures, fans, battery health, with live graphs.</p>
+          <div class="icon"><svg><use href="#i-package"/></svg></div>
+          <h3>Shelf</h3>
+          <p>Drop files on the box icon to park them; click it to drag them out again. Entries leave after 24 hours, or when you say.</p>
         </article>
         <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" /></svg></div>
-          <h3>Volume mixer</h3>
-          <p>Volume per app with boost above 100 %, mute, and a different speaker or headset for each app.</p>
+          <div class="icon"><svg><use href="#i-repeat"/></svg></div>
+          <h3>Converter</h3>
+          <p>Drop a file on the icon and choose WebP, JPEG, MP3, GIF, PDF or a smaller size. The result can go straight onto the shelf.</p>
         </article>
         <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg></div>
-          <h3>Keep awake</h3>
-          <p>No suspend, no screen blanking, for 15 minutes or until you say so. Stops by itself on low battery.</p>
+          <div class="icon"><svg><use href="#i-clipboard"/></svg></div>
+          <h3>Clipboard</h3>
+          <p>Your recent copies, images included. Click one to copy it again, then paste wherever you are.</p>
         </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg></div>
-          <h3>Network</h3>
-          <p>Live speed, session totals, addresses, apps with open connections, a speed test on demand.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16h.01" /><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /><path d="M21.946 12.013H2.054" /><path d="M6 16h.01" /></svg></div>
-          <h3>Disks</h3>
-          <p>Space per volume, read and write speed, drive health from SMART, safe eject.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" /></svg></div>
-          <h3>Energy</h3>
-          <p>Power flow, power mode, mouse and headset batteries, the apps using the most CPU.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></svg></div>
-          <h3>Clipboard history</h3>
-          <p>Everything you copy, searchable and pinnable. Stays on your computer; entries password managers mark as secret are skipped.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" /></svg></div>
-          <h3>Copy text from screen</h3>
-          <p>Select any area: its text or QR code lands on your clipboard. Fully offline.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h7" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /><path d="m10 18 3-3-3-3" /></svg></div>
-          <h3>Convert files</h3>
-          <p>Images, audio, video and documents. Compress, make GIFs. Everything runs locally.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" /><path d="M20 2v4" /><path d="M22 4h-4" /><circle cx="4" cy="20" r="2" /></svg></div>
-          <h3>Clean up</h3>
-          <p>Caches, Trash and leftovers of removed apps. Shows everything before it deletes anything.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><polyline points="3.29 7 12 12 20.71 7" /><path d="m7.5 4.27 9 5.15" /></svg></div>
-          <h3>Packages</h3>
-          <p>Search, install, remove and update RPM and Flatpak apps without a terminal.</p>
-        </article>
-        <article class="card glass">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="15" cy="12" r="3" /><rect width="20" height="14" x="2" y="5" rx="7" /></svg></div>
-          <h3>Alt+Tab with previews</h3>
-          <p>One large live preview per window, minimized ones included, grouped by app.</p>
-        </article>
+      </div>
       </div>
     </section>
 
-    <section class="wrap">
+    <!-- ============ keyboard ============ -->
+    <section id="shortcuts" class="wrap">
       <div class="split">
         <div class="text">
-          <h3>Numbers in the top bar, nothing more</h3>
-          <p>Pick the readings you care about (CPU temperature, memory, battery watts, GPU, network) and Andromeda shows them as plain text next to its icon. No graphs fighting for space.</p>
-          <p>Click the icon or press <code>Super+A</code> for the full panel.</p>
+          <h2>Hands stay on the keyboard</h2>
+          <p>Every shortcut works in every app and can be changed in Settings → Shortcuts.</p>
+          <p><b>Alt+Tab</b> gets large live previews too: one per window, minimized ones included, grouped by app, each with its title. Press <kbd>W</kbd> to close a window without leaving the switcher.</p>
         </div>
-        <img class="topbar" src="screenshots/topbar.png" alt="CPU 76°, RAM 28% and AC next to the Andromeda icon in the GNOME top bar" width="486" height="64">
+        <dl class="keys glass">
+          <div><dt><kbd>Super</kbd><kbd>A</kbd></dt><dd>Open the panel</dd></div>
+          <div><dt><kbd>Super</kbd><kbd>Shift</kbd><kbd>T</kbd></dt><dd>Copy text from screen</dd></div>
+          <div><dt><kbd>Super</kbd><kbd>Shift</kbd><kbd>C</kbd></dt><dd>Pick a color</dd></div>
+          <div><dt><kbd>Super</kbd><kbd>Shift</kbd><kbd>K</kbd></dt><dd>Keep awake on/off</dd></div>
+          <div><dt><kbd>Super</kbd><kbd>Shift</kbd><kbd>M</kbd></dt><dd>Microphone on/off</dd></div>
+        </dl>
       </div>
+      <img class="shot wide" src="screenshots/alt-tab.png" width="1640" height="316" loading="lazy" alt="Andromeda's Alt+Tab: live previews of an image viewer, Characters, System Monitor, Calculator, Text Editor and Clocks, each titled">
     </section>
 
+    <!-- ============ light + private ============ -->
     <section class="wrap">
-      <div class="split">
-        <div class="text">
-          <h3>Frosted glass that matches your desktop</h3>
-          <p>Panel and Settings share one glass style: a dark tint, a fine light edge and soft text shadows, on one consistent scale of spacing and corners.</p>
-          <p>With <a href="https://extensions.gnome.org/extension/3193/blur-my-shell/">Blur My Shell</a>, add <code>andromeda</code> under Applications and the desktop blurs softly behind it.</p>
+      <div class="facts">
+        <div class="fact">
+          <p class="big">0.2<small>%</small></p>
+          <p>of one CPU core for the background service, at about 28 MB of memory. Written in Rust.</p>
         </div>
-        <div class="glass card">
-          <h3>Light when you are not looking</h3>
-          <p>A tiny background service does the measuring, at about 0.2 % of one CPU core and 28 MB of memory. The panel only runs while it is open.</p>
+        <div class="fact">
+          <p class="big">0</p>
+          <p>accounts, trackers and telemetry. The network is used only for the speed test and packages you ask for.</p>
+        </div>
+        <div class="fact">
+          <p class="big">1</p>
+          <p>icon in the top bar. The panel opens right under it and quits a few minutes after you close it.</p>
         </div>
       </div>
     </section>
 
+    <!-- ============ install ============ -->
     <section id="install" class="wrap">
       <div class="section-title">
-        <h2>Install</h2>
-        <p>Three steps on Fedora 44 or newer with GNOME 50.</p>
+        <h2>Install in three steps</h2>
+        <p>Fedora 44 or newer with GNOME 50 on Wayland.</p>
       </div>
-      <div class="steps">
-        <div class="step glass">
-          <h3>Download and install the RPM</h3>
-          <p>Get <code>andromeda-*.rpm</code> from the <a href="https://github.com/Incept0s/andromeda/releases">releases page</a>, then:</p>
+      <ol class="steps">
+        <li class="glass">
+          <h3>Install the RPM</h3>
+          <p>Download it from the <a href="https://github.com/Incept0s/andromeda/releases/latest">latest release</a>, then:</p>
           <pre><code>sudo dnf install ./andromeda-*.rpm</code></pre>
-        </div>
-        <div class="step glass">
+        </li>
+        <li class="glass">
           <h3>Log out and back in</h3>
-          <p>GNOME on Wayland loads new extensions only at login.</p>
-        </div>
-        <div class="step glass">
-          <h3>Switch on the extension</h3>
-          <p>Open the <strong>Extensions</strong> app and turn on <strong>Andromeda</strong>. The icon appears in the top bar.</p>
-        </div>
-      </div>
-      <p class="note" style="text-align:center">Prefer to build it yourself? <code>git clone https://github.com/Incept0s/andromeda &amp;&amp; cd andromeda &amp;&amp; scripts/install.sh</code></p>
-    </section>
-
-    <section id="privacy" class="wrap">
-      <div class="facts">
-        <div class="glass">
-          <h3>Private by default</h3>
-          <ul>
-            <li>No account, no telemetry, no tracking.</li>
-            <li>The network is used only for what you start: the speed test and package installs.</li>
-            <li>Clipboard history stays on disk, readable by you alone.</li>
-          </ul>
-        </div>
-        <div class="glass">
-          <h3>Safe by design</h3>
-          <ul>
-            <li>Everything runs as you; a password is asked only to install packages or clean system caches.</li>
-            <li>The cleaner shows you every item before it deletes anything.</li>
-            <li>If the extension misbehaves, stopping the service gives GNOME its Alt+Tab back.</li>
-          </ul>
-        </div>
-        <div class="glass">
-          <h3>Built for this desktop</h3>
-          <ul>
-            <li>PipeWire, systemd, D-Bus and GNOME Shell, used directly.</li>
-            <li>Missing hardware or tools only hide what needs them.</li>
-            <li>Written in Rust, interface included (Tauri + Leptos).</li>
-          </ul>
-        </div>
-      </div>
+          <p>GNOME on Wayland only loads new extensions at login.</p>
+        </li>
+        <li class="glass">
+          <h3>Switch it on</h3>
+          <p>Open the <b>Extensions</b> app and turn on <b>Andromeda</b>. For the frosted blur, add <code>andromeda</code> under Applications in <a href="https://extensions.gnome.org/extension/3193/blur-my-shell/">Blur My Shell</a>.</p>
+        </li>
+      </ol>
+      <p class="note center">Building from source: <code>git clone https://github.com/Incept0s/andromeda &amp;&amp; cd andromeda &amp;&amp; scripts/install.sh</code></p>
     </section>
   </main>
 
@@ -205,5 +303,58 @@
       <p><a href="https://github.com/Incept0s/andromeda">Source</a> · <a href="https://github.com/Incept0s/andromeda/releases">Releases</a> · <a href="https://github.com/Incept0s/andromeda/issues">Issues</a></p>
     </div>
   </footer>
+
+  <script>
+    // Tabs: arrow keys move between them, as in the panel.
+    const tabs = [...document.querySelectorAll('[role=tab]')];
+    const pick = (t) => {
+      tabs.forEach((b) => {
+        const on = b === t;
+        b.setAttribute('aria-selected', on);
+        b.tabIndex = on ? 0 : -1;
+        document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+      });
+    };
+    tabs.forEach((b, i) => {
+      b.tabIndex = i ? -1 : 0;
+      b.addEventListener('click', () => pick(b));
+      b.addEventListener('keydown', (e) => {
+        const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        const n = tabs[(i + d + tabs.length) % tabs.length];
+        pick(n);
+        n.focus();
+      });
+    });
+
+    // Download button: link straight to the newest release's RPM. GitHub's
+    // releases/latest skips pre-releases, so ask the API; without it, the
+    // button keeps pointing at the releases page.
+    fetch('https://api.github.com/repos/Incept0s/andromeda/releases?per_page=10')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((releases) => {
+        for (const r of releases) {
+          const rpm = !r.draft && r.assets.find((a) => /\.x86_64\.rpm$/.test(a.name));
+          if (!rpm) continue;
+          document.getElementById('dl').href = rpm.browser_download_url;
+          document.getElementById('ver').textContent =
+            r.tag_name.replace(/^v/, '') + (r.prerelease ? ' pre-release' : '');
+          return;
+        }
+      })
+      .catch(() => {});
+
+    // The numbers in the illustrated top bar drift like real readings.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const v = { cpu: [73, 70, 78], ram: [21, 20, 23], gpu: [53, 50, 57] };
+      setInterval(() => {
+        for (const [k, [x, lo, hi]] of Object.entries(v)) {
+          v[k][0] = Math.min(hi, Math.max(lo, x + Math.round(Math.random() * 4 - 2)));
+          document.querySelector(`[data-v=${k}]`).textContent = v[k][0];
+        }
+      }, 1500);
+    }
+  </script>
 </body>
 </html>
