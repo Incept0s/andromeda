@@ -228,7 +228,8 @@ reference tools.
 
 Planned: [#5](../../issues/5) icons instead of text labels (CPU, RAM, …) for
 the live numbers in the top bar · [#6](../../issues/6) Alt+Tab wraps into rows
-instead of scrolling when many windows are open.
+instead of scrolling when many windows are open · [#7](../../issues/7) many
+more converter formats (Markdown, SVG, HEIC, PDF tools, batches).
 
 Known limits: Linux has no per-app energy figure, so the Energy tab ranks apps
 by CPU use; per-app network traffic needs root, so the Network tab counts open
