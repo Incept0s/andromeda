@@ -226,6 +226,9 @@ is inconsistent · [#3](../../issues/3) the clipboard window does not work
 properly · [#4](../../issues/4) readings not yet verified one by one against
 reference tools.
 
+Planned: [#5](../../issues/5) icons instead of text labels (CPU, RAM, …) for
+the live numbers in the top bar.
+
 Known limits: Linux has no per-app energy figure, so the Energy tab ranks apps
 by CPU use; per-app network traffic needs root, so the Network tab counts open
 connections.
