@@ -659,6 +659,7 @@ fn Awake() -> impl IntoView {
                 }).collect_view()}
             </select>
         </div>
+        <Toggle label="Also with the lid closed" hint="The laptop keeps running when you close it, e.g. for downloads or an external monitor. Mind the heat in a bag." get=|c| c.awake.lid_closed set=|c, v| c.awake.lid_closed = v />
         <Toggle label="Start keeping awake at login" hint="Uses the default duration." get=|c| c.awake.start_with_app set=|c, v| c.awake.start_with_app = v />
     }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Small clients for desktop D-Bus services: notifications, GNOME's
-//! session inhibitor (keep awake) and power-profiles-daemon. Also the
+//! session inhibitor and logind's lid lock (keep awake) and
+//! power-profiles-daemon. Also the
 //! microphone mute switch (PipeWire's wpctl).
 
 use std::collections::HashMap;
@@ -62,6 +63,20 @@ pub trait SessionManager {
         flags: u32,
     ) -> zbus::Result<u32>;
     fn uninhibit(&self, cookie: u32) -> zbus::Result<()>;
+}
+
+/// logind suspends on lid close (HandleLidSwitch) and ignores ordinary
+/// sleep inhibitors for it; only a "handle-lid-switch" block lock stops it.
+/// gsd-power takes one itself only while an external monitor is attached.
+/// Polkit allows it for the active session without a password.
+#[proxy(
+    interface = "org.freedesktop.login1.Manager",
+    default_service = "org.freedesktop.login1",
+    default_path = "/org/freedesktop/login1"
+)]
+pub trait Login1 {
+    /// The lock lasts until the returned file descriptor is closed.
+    fn inhibit(&self, what: &str, who: &str, why: &str, mode: &str) -> zbus::Result<zbus::OwnedFd>;
 }
 
 /// Inhibit flags: 4 = suspend, 8 = idle (screen blank / idle actions).

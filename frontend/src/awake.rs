@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use leptos::prelude::*;
 
+use crate::settings::Toggle;
 use crate::tauri;
 use crate::widgets::{clock, countdown, data, now_secs};
 
@@ -84,6 +85,9 @@ pub fn AwakeTab() -> impl IntoView {
                 }).collect_view()}
             </div>
             <p class="muted small">{battery_note}</p>
+        </div>
+        <div class="card">
+            <Toggle label="Also with the lid closed" hint="Keeps running when you close the laptop." get=|c| c.awake.lid_closed set=|c, v| c.awake.lid_closed = v />
         </div>
     }
 }

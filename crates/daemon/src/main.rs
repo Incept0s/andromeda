@@ -51,6 +51,9 @@ struct Daemon {
     /// -1 = off, 0 = until turned off, otherwise the end as Unix seconds.
     awake_until: i64,
     awake_cookie: Option<u32>,
+    /// logind lid lock while keep awake covers a closed lid; dropping it
+    /// releases the lock.
+    lid_lock: Option<zbus::OwnedFd>,
     session: zbus::Connection,
     system: Option<zbus::Connection>,
     procs: Procs,
@@ -101,7 +104,38 @@ impl Daemon {
         } else {
             unix_now() + i64::from(minutes) * 60
         };
+        self.sync_lid_lock().await;
         Ok(())
+    }
+
+    /// Holds logind's lid lock exactly while keep awake is on and the
+    /// "lid closed" option is set. A failure only costs that option.
+    async fn sync_lid_lock(&mut self) {
+        let want = self.awake_cookie.is_some() && self.config.awake.lid_closed;
+        if !want {
+            self.lid_lock = None;
+            return;
+        }
+        if self.lid_lock.is_some() {
+            return;
+        }
+        let Some(system) = &self.system else { return };
+        let lock = match desktop::Login1Proxy::new(system).await {
+            Ok(l) => {
+                l.inhibit(
+                    "handle-lid-switch",
+                    "Andromeda",
+                    "Keep awake with the lid closed",
+                    "block",
+                )
+                .await
+            }
+            Err(e) => Err(e),
+        };
+        match lock {
+            Ok(fd) => self.lid_lock = Some(fd),
+            Err(e) => eprintln!("andromedad: lid lock refused: {e}"),
+        }
     }
 
     async fn awake_off(&mut self) {
@@ -110,6 +144,7 @@ impl Daemon {
         {
             let _ = sm.uninhibit(cookie).await;
         }
+        self.lid_lock = None;
         self.awake_until = -1;
     }
 
@@ -213,6 +248,7 @@ impl Daemon {
         }
         self.max_volume.store(c.mixer.max_volume, Ordering::Relaxed);
         self.config = c;
+        self.sync_lid_lock().await;
         let _ = self.config_changed(&e).await;
         Ok(())
     }
@@ -601,6 +637,7 @@ async fn main() -> zbus::Result<()> {
         config,
         awake_until: -1,
         awake_cookie: None,
+        lid_lock: None,
         session: session.clone(),
         system: system.clone(),
         procs: Procs::new(Path::new("/proc")),

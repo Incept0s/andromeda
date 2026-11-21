@@ -236,6 +236,8 @@ pub struct Awake {
     /// Stop keeping awake when the battery drops below this (%); `None` = never.
     pub stop_below_battery: Option<u32>,
     pub start_with_app: bool,
+    /// Also keep running with the lid closed (no suspend on lid close).
+    pub lid_closed: bool,
 }
 
 impl Default for Awake {
@@ -244,6 +246,7 @@ impl Default for Awake {
             default_minutes: 60,
             stop_below_battery: Some(20),
             start_with_app: false,
+            lid_closed: false,
         }
     }
 }

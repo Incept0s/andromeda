@@ -8,6 +8,9 @@ All notable changes to Andromeda are listed here. The format follows
 
 ### Added
 
+- Keep awake can also cover a closed lid (Keep awake tab or Settings →
+  Keep awake → "Also with the lid closed"): while it is on, closing the
+  laptop no longer suspends it.
 - Shelf icon in the top bar (a box, on by default): drop files on it, click
   it to open a small shelf window and drag files out again. Items leave
   after 24 hours (Settings → Top bar: 1 hour, 24 hours or never), a Clear

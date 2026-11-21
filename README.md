@@ -71,7 +71,7 @@ Click the icon or press <kbd>Super</kbd>+<kbd>A</kbd>. Eight tabs, in the order 
 | **Network** | Live speed, session totals, interfaces and addresses, apps with open connections, speed test on demand |
 | **Disks** | Space per volume, read and write speed, drive health (SMART), eject |
 | **Energy** | Battery and power flow, power mode, mouse and headset batteries, busiest apps |
-| **Keep awake** | No suspend or screen blanking for a set time; stops on its own when the battery runs low |
+| **Keep awake** | No suspend or screen blanking for a set time, optionally with the lid closed; stops on its own when the battery runs low |
 | **Tools** | Clipboard history (text and images), copy text from screen (OCR, QR codes), color picker, file converter, cleaner, RPM and Flatpak packages, shelf |
 | **Controls** | Quick switches for the background features |
 
